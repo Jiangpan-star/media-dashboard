@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+
+# 敏感配置（飞书API密钥）
+config.py
+
+# 日志和临时文件
+app_log.txt
+*.log
+nul
+
+# 数据缓存
+*.json
+!data.json
+!tasks.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

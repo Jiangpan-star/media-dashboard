@@ -1,0 +1,4459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>融媒体数据看板 · 西北民族大学</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
+<style>
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --bg:       #080c14;
+  --bg2:      #0e1420;
+  --bg3:      #141b2d;
+  --bg4:      #1c2540;
+  --border:   rgba(255,255,255,0.06);
+  --border2:  rgba(255,255,255,0.12);
+  --text:     #e2e8f8;
+  --text2:    #a0aec8;
+  --muted:    #5a6888;
+  --accent:   #6c63ff;
+  --accent2:  #3ecfcf;
+  --red:      #ff4d4d;
+  --green:    #22d3a3;
+  --amber:    #f5a623;
+  --pink:     #ff6eb4;
+  --tt:       #fe2c55;
+  --ks:       #ff6b35;
+  --bili:     #00b5e2;
+  --wx:       #07c160;
+  --shadow:   0 4px 24px rgba(0,0,0,0.4);
+  --glow:     0 0 40px rgba(108,99,255,0.15);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 14px;
+  overflow-x: hidden;
+}
+
+/* ===== 粒子背景画布 ===== */
+#particles {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none; z-index: 0;
+}
+
+/* ===== 背景装饰 ===== */
+body::before {
+  content: '';
+  position: fixed;
+  top: -200px; left: -200px;
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(0,120,189,0.07) 0%, transparent 70%);
+  pointer-events: none; z-index: 1;
+}
+body::after {
+  content: '';
+  position: fixed;
+  bottom: -200px; right: -200px;
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(34,211,163,0.05) 0%, transparent 70%);
+  pointer-events: none; z-index: 1;
+}
+
+/* ===== 顶栏 ===== */
+.header {
+  position: sticky; top: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 28px; height: 58px;
+  background: rgba(8,12,20,0.92);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+.header::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,120,189,0.5), rgba(34,211,163,0.4), rgba(245,166,35,0.3), transparent);
+  animation: shimmer 3s linear infinite;
+  background-size: 200% 100%;
+}
+.header-brand { display: flex; align-items: center; gap: 12px; }
+.brand-logo {
+  width: 38px; height: 38px; border-radius: 50%;
+  object-fit: cover; flex-shrink: 0;
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,0.08), 0 0 18px rgba(0,120,189,0.25);
+  transition: box-shadow .3s ease;
+}
+.header-brand:hover .brand-logo {
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,0.12), 0 0 24px rgba(0,120,189,0.4);
+}
+.brand-text { display: flex; flex-direction: column; justify-content: center; }
+.brand-name { font-size: 15px; font-weight: 700; letter-spacing: .3px; line-height: 1.3; }
+.brand-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.brand-divider {
+  display: inline-block; width: 3px; height: 3px; border-radius: 50%;
+  background: var(--muted); margin: 0 6px; vertical-align: middle;
+}
+
+.header-right { display: flex; align-items: center; gap: 10px; }
+.live-badge {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 20px;
+  background: rgba(34,211,163,0.1);
+  border: 1px solid rgba(34,211,163,0.25);
+  font-size: 11px; color: var(--green);
+}
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: blink 2s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* 数据健康状态 */
+.health-badge {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  font-size: 11px; color: var(--text2);
+  cursor: default;
+}
+.health-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; transition: background .3s; }
+.health-badge.ok   .health-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.health-badge.warn .health-dot { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+.health-badge.err  .health-dot { background: var(--red);   box-shadow: 0 0 6px var(--red); animation: blink 1s infinite; }
+.health-badge.ok   .health-label { color: var(--green); }
+.health-badge.warn .health-label { color: var(--amber); }
+.health-badge.err  .health-label { color: var(--red); }
+
+/* 自动刷新倒计时 */
+.auto-refresh-wrap {
+  position: relative; width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: default;
+}
+.auto-refresh-ring {
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(108,99,255,0.2);
+  border-top-color: var(--accent);
+  animation: spinRing 5s linear infinite;
+  transition: none;
+}
+.auto-refresh-ring.spinning { animation-duration: .8s; }
+@keyframes spinRing { to { transform: rotate(360deg); } }
+.auto-refresh-text {
+  font-size: 9px; font-weight: 600; color: var(--accent);
+  z-index: 1; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+/* F6: 导出按钮 */
+.btn-export {
+  display: flex; align-items: center; gap: 5px;
+  padding: 7px 14px; border-radius: 8px; border: 1px solid rgba(108,99,255,0.3);
+  background: rgba(108,99,255,0.08); color: var(--accent);
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  transition: all .2s;
+}
+.btn-export:hover { background: rgba(108,99,255,0.18); border-color: var(--accent); }
+.export-wrap { position: relative; }
+.export-menu {
+  display: none; position: absolute; top: calc(100% + 6px); right: 0;
+  background: var(--bg3); border: 1px solid var(--border2);
+  border-radius: 10px; padding: 5px; z-index: 500;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4); min-width: 160px;
+}
+.export-menu.show { display: block; animation: fadeSlideUp .15s ease; }
+.export-item {
+  padding: 8px 12px; border-radius: 7px; font-size: 12px; color: var(--text2);
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.export-item:hover { background: rgba(108,99,255,0.12); color: var(--accent); }
+
+.hdr-time { font-size: 11px; color: var(--muted); }
+.btn-refresh {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 16px; border-radius: 8px; border: none;
+  background: linear-gradient(135deg, #0078bd, #0068a8);
+  color: #fff; font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all .25s;
+  box-shadow: 0 2px 12px rgba(0,120,189,0.35);
+}
+.btn-refresh:hover { transform: translateY(-1px); box-shadow: 0 4px 18px rgba(0,120,189,0.45); }
+.btn-refresh:active { transform: translateY(0); }
+.btn-refresh svg { width:14px; height:14px; transition: transform .4s; }
+.btn-refresh.spinning svg { animation: spin .6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== 导航 Tab ===== */
+.tabbar {
+  display: flex; padding: 0 28px;
+  background: rgba(8,12,20,0.8);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto; gap: 2px;
+  position: relative;
+}
+.tabbar::-webkit-scrollbar { height: 0; }
+.tab {
+  padding: 12px 18px; font-size: 13px; color: var(--muted);
+  cursor: pointer; border-bottom: 2px solid transparent;
+  transition: color .2s, font-weight .2s; white-space: nowrap; user-select: none;
+  position: relative; z-index: 1;
+}
+.tab::after {
+  content: '';
+  position: absolute; bottom: 0; left: 50%; right: 50%; height: 2px;
+  background: var(--accent); border-radius: 2px 2px 0 0;
+  transition: left .3s cubic-bezier(.4,0,.2,1), right .3s cubic-bezier(.4,0,.2,1);
+}
+.tab:hover:not(.active) { color: var(--text2); }
+.tab.active { color: var(--accent); font-weight: 600; }
+.tab.active::after { left: 18px; right: 18px; }
+
+/* ===== 主内容 ===== */
+.main { padding: 24px 28px; max-width: 1440px; margin: 0 auto; position: relative; z-index: 1; }
+.section { display: none; }
+.section.active { display: block; }
+
+/* ===== 指标卡片 ===== */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px; margin-bottom: 20px;
+}
+.kpi-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  position: relative; overflow: hidden;
+  transition: border-color .2s, transform .2s;
+  cursor: default;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--kpi-color, linear-gradient(90deg, #6c63ff, #3ecfcf));
+  border-radius: 14px 14px 0 0;
+}
+.kpi-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+.kpi-label { font-size: 11px; color: var(--muted); margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
+.kpi-icon { font-size: 13px; }
+.kpi-value { font-size: 28px; font-weight: 700; letter-spacing: -1px; color: var(--text); line-height: 1; }
+.kpi-unit { font-size: 13px; font-weight: 400; color: var(--text2); margin-left: 2px; }
+.kpi-sub { font-size: 11px; color: var(--muted); margin-top: 6px; }
+.kpi-trend { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 10px; margin-top: 4px; }
+.trend-up { background: rgba(34,211,163,0.12); color: var(--green); }
+.trend-na { background: rgba(90,104,136,0.12); color: var(--muted); }
+/* F2: 同比环比徽章 */
+.kpi-growth {
+  position: absolute; top: 14px; right: 14px;
+  font-size: 10px; font-weight: 600; padding: 2px 7px;
+  border-radius: 10px;
+}
+.kpi-growth.up  { background: rgba(34,211,163,0.15); color: var(--green); }
+.kpi-growth.dn  { background: rgba(255,77,77,0.15);  color: var(--red); }
+/* F1: 迷你趋势线 */
+.kpi-sparkline { display: block; width: 100%; height: 30px; margin-top: 6px; }
+
+
+/* 大指标区（四平台累计）*/
+.plat-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px; margin-bottom: 20px;
+}
+.plat-card {
+  border-radius: 14px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  transition: all .2s;
+  position: relative; overflow: hidden;
+  animation: fadeSlideUp 0.45s ease both;
+}
+.plat-card:hover { transform: translateY(-2px); border-color: var(--border2); }
+.plat-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.plat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.plat-name { font-size: 13px; font-weight: 600; }
+.plat-tag { margin-left: auto; font-size: 10px; padding: 2px 8px; border-radius: 8px; }
+.plat-nums { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.plat-num-item { }
+.plat-num-label { font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+.plat-num-value { font-size: 18px; font-weight: 600; }
+.plat-bar-wrap { margin-top: 12px; height: 4px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
+.plat-bar {
+  height: 100%; border-radius: 4px; transition: width .8s ease;
+  position: relative; overflow: hidden;
+}
+.plat-bar::after {
+  content: '';
+  position: absolute; top: 0; left: -100%; width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+  animation: barShine 2.5s ease-in-out infinite;
+}
+
+/* ===== 图表卡 ===== */
+.charts-row { display: grid; grid-template-columns: 5fr 3fr; gap: 14px; margin-bottom: 16px; }
+.charts-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+.charts-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+.charts-row-full { margin-bottom: 16px; }
+.chart-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 22px;
+  transition: border-color .2s;
+}
+.chart-card:hover { border-color: var(--border2); }
+.chart-card.full { }
+.chart-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; gap: 10px; flex-wrap: wrap; }
+.chart-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.chart-desc { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.chart-legends { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.leg { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text2); }
+.leg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.leg-line { width: 14px; height: 2px; border-radius: 2px; flex-shrink: 0; }
+.chart-wrap { position: relative; height: 220px; }
+.chart-wrap-sm { position: relative; height: 180px; }
+.chart-wrap-lg { position: relative; height: 280px; }
+.chart-wrap-xl { position: relative; height: 340px; }
+
+/* 筛选按钮组 */
+.filter-btns { display: flex; gap: 4px; }
+.fbtn {
+  padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border);
+  background: transparent; color: var(--muted); font-size: 11px;
+  cursor: pointer; transition: all .2s;
+}
+.fbtn.active, .fbtn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ===== AI 洞察卡 ===== */
+.insight-card {
+  background: linear-gradient(135deg, rgba(108,99,255,0.08) 0%, rgba(62,207,207,0.05) 100%);
+  border: 1px solid rgba(108,99,255,0.2);
+  border-radius: 14px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  display: flex; align-items: flex-start; gap: 12px;
+  animation: accentPulse 4s ease-in-out infinite;
+}
+.insight-icon {
+  font-size: 20px; flex-shrink: 0; margin-top: 1px;
+  animation: floatY 3s ease-in-out infinite;
+}
+.insight-title { font-size: 12px; font-weight: 600; color: var(--accent2); margin-bottom: 5px; }
+.insight-text { font-size: 12px; color: var(--text2); line-height: 1.8; }
+.insight-text strong { color: var(--text); }
+
+/* ===== 数据表格 ===== */
+.tbl-ctrl { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+.tbl-title { font-size: 15px; font-weight: 600; }
+.tbl-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.tbl-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  padding: 11px 14px; text-align: left;
+  font-size: 11px; color: var(--muted); font-weight: 500;
+  background: var(--bg3); white-space: nowrap;
+  border-bottom: 1px solid var(--border); letter-spacing: .3px;
+}
+thead th:first-child { border-radius: 10px 0 0 0; }
+thead th:last-child { border-radius: 0 10px 0 0; }
+tbody td {
+  padding: 11px 14px; font-size: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  vertical-align: middle;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: rgba(255,255,255,0.025); }
+.rank-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 6px;
+  font-size: 12px; font-weight: 600;
+}
+.rank-1 { background: rgba(245,166,35,0.2); color: #f5a623; animation: popIn 0.4s ease both; }
+.rank-2 { background: rgba(160,174,200,0.15); color: #a0aec8; animation: popIn 0.4s ease both; animation-delay: 0.08s; }
+.rank-3 { background: rgba(205,124,59,0.2); color: #cd7c3b; animation: popIn 0.4s ease both; animation-delay: 0.16s; }
+.rank-n { background: rgba(90,104,136,0.15); color: var(--muted); }
+.v-title { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text2); }
+.v-title:hover { color: var(--text); }
+.plat-tag-tt { background: rgba(254,44,85,0.12); color: var(--tt); padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 500; }
+.plat-tag-ks { background: rgba(255,107,53,0.12); color: var(--ks); padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 500; }
+.plat-tag-bili { background: rgba(0,181,226,0.12); color: var(--bili); padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 500; }
+.plat-tag-wx { background: rgba(7,193,96,0.12); color: var(--wx); padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 500; }
+.num-play { color: var(--amber); font-weight: 500; }
+.num-muted { color: var(--text2); }
+.num-inter { color: #c084fc; font-weight: 500; }
+.author-tag { display: inline-block; padding: 2px 8px; border-radius: 6px; background: var(--bg3); font-size: 10px; color: var(--text2); }
+
+/* 进度条 */
+.prog-wrap { display: flex; align-items: center; gap: 8px; }
+.prog-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; min-width: 60px; }
+.prog-fill { height: 100%; border-radius: 4px; transition: width .8s ease; }
+.prog-val { font-size: 11px; color: var(--text2); white-space: nowrap; }
+
+/* ══════════════════════════════════════
+   动效：入场动画
+   ══════════════════════════════════════ */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes shimmer {
+  from { background-position: -400px 0; }
+  to   { background-position: 400px 0; }
+}
+@keyframes progressFill {
+  from { width: 0; }
+}
+@keyframes glowPulse {
+  0%,100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+@keyframes waveIn {
+  from { opacity: 0; transform: scale(0.7) translateY(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes barShine {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes popIn {
+  0%   { opacity: 0; transform: scale(0.5); }
+  60%  { transform: scale(1.15); }
+  80%  { transform: scale(0.93); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes ping {
+  0%   { transform: scale(1); opacity: 0.8; }
+  70%  { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+@keyframes tabSlide {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes dataFlash {
+  0%   { background-color: rgba(108,99,255,0.35); }
+  100% { background-color: transparent; }
+}
+@keyframes floatY {
+  0%,100% { transform: translateY(0px); }
+  50%      { transform: translateY(-6px); }
+}
+@keyframes accentPulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(108,99,255,0); }
+  50%      { box-shadow: 0 0 18px 4px rgba(108,99,255,0.25); }
+}
+
+/* 卡片入场（全局容器） */
+.main { position: relative; z-index: 2; }
+
+/* KPI 卡片入场 */
+.kpi-card {
+  animation: fadeSlideUp 0.45s ease both;
+}
+.kpi-card:nth-child(1) { animation-delay: 0.05s; }
+.kpi-card:nth-child(2) { animation-delay: 0.12s; }
+.kpi-card:nth-child(3) { animation-delay: 0.19s; }
+.kpi-card:nth-child(4) { animation-delay: 0.26s; }
+.kpi-card:nth-child(5) { animation-delay: 0.33s; }
+.kpi-card:nth-child(6) { animation-delay: 0.40s; }
+.kpi-card:nth-child(7) { animation-delay: 0.47s; }
+.kpi-card:nth-child(8) { animation-delay: 0.54s; }
+
+/* 图表卡入场 */
+.chart-card {
+  animation: fadeSlideUp 0.45s ease both;
+}
+.section.active .chart-card:nth-child(1) { animation-delay: 0.10s; }
+.section.active .chart-card:nth-child(2) { animation-delay: 0.20s; }
+.section.active .chart-card:nth-child(3) { animation-delay: 0.30s; }
+.section.active .chart-card:nth-child(4) { animation-delay: 0.40s; }
+
+/* 深度平台面板 */
+.depth-panel {
+  animation: fadeIn 0.35s ease both;
+}
+
+/* ══════════════════════════════════════
+   动效：悬停微交互
+   ══════════════════════════════════════ */
+.kpi-card {
+  transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+  cursor: default;
+}
+.kpi-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.45), 0 0 20px rgba(108,99,255,0.12);
+}
+.kpi-card::after {
+  content: '';
+  position: absolute; inset: 0; border-radius: inherit;
+  background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 60%);
+  opacity: 0; transition: opacity .25s;
+  pointer-events: none;
+}
+.kpi-card:hover::after { opacity: 1; }
+
+.chart-card {
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.chart-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.4);
+}
+
+/* 进度条入场动画 */
+.prog-fill {
+  animation: progressFill 1.2s ease both;
+}
+
+/* ══════════════════════════════════════
+   动效：数字计数器（kpi-value 加粗 + 发光）
+   ══════════════════════════════════════ */
+.kpi-value {
+  transition: color .2s;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-value.counting { color: var(--accent2); }
+
+/* 洞察卡入场 */
+.insight-card {
+  animation: fadeSlideUp 0.4s ease both;
+}
+
+/* ══════════════════════════════════════
+   骨架屏加载状态
+   ══════════════════════════════════════ */
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--bg3) 25%,
+    var(--bg4) 50%,
+    var(--bg3) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.6s infinite;
+  border-radius: 8px;
+}
+.skeleton-kpi {
+  height: 100px; border-radius: 14px;
+  animation: shimmer 1.6s infinite;
+}
+.skeleton-chart {
+  height: 220px; border-radius: 14px;
+  animation: shimmer 1.6s infinite;
+}
+.skeleton-wide {
+  height: 60px; border-radius: 14px;
+  animation: shimmer 1.6s infinite;
+}
+
+/* 数据加载中遮罩 */
+#loadingOverlay {
+  position: fixed; inset: 0; z-index: 999;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 20px;
+  transition: opacity .5s ease;
+}
+#loadingOverlay.hidden {
+  opacity: 0; pointer-events: none;
+}
+.loader-title { font-size: 18px; font-weight: 700; color: var(--text); }
+.loader-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.loader-spinner {
+  width: 42px; height: 42px;
+  border: 3px solid rgba(108,99,255,0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loader-bar-wrap {
+  width: 200px; height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 3px; overflow: hidden;
+}
+.loader-bar {
+  height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  animation: loadBar 2s ease-in-out infinite;
+}
+@keyframes loadBar {
+  0%   { width: 0; margin-left: 0; }
+  50%  { width: 60%; margin-left: 20%; }
+  100% { width: 0; margin-left: 100%; }
+}
+
+/* 刷新成功提示 */
+#toast {
+  position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(80px);
+  z-index: 9999;
+  background: var(--bg4); border: 1px solid var(--accent);
+  color: var(--text); padding: 10px 22px; border-radius: 10px;
+  font-size: 13px; box-shadow: 0 4px 20px rgba(108,99,255,0.3);
+  transition: transform .35s ease, opacity .35s ease;
+  opacity: 0; pointer-events: none;
+}
+#toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+/* 卡片相对定位（用于 ::after 效果） */
+.kpi-card { position: relative; }
+
+/* Tab 切换动画 */
+.section { display: none; opacity: 0; }
+.section.active { display: block; opacity: 1; }
+
+/* 平台标签动画 */
+.plat-tag-tt,.plat-tag-ks,.plat-tag-bili,.plat-tag-wx {
+  transition: transform .15s, box-shadow .15s;
+}
+.plat-tag-tt:hover,.plat-tag-ks:hover,.plat-tag-bili:hover,.plat-tag-wx:hover {
+  transform: scale(1.05);
+}
+
+/* 表格行斑马纹 */
+tbody tr:nth-child(even) td { background: rgba(255,255,255,0.01); }
+
+/* 进度条渐变色（通过 JS 动态设置 class） */
+.prog-fill-tt  { background: linear-gradient(90deg,#fe2c55,#ff6b8a); }
+.prog-fill-ks  { background: linear-gradient(90deg,#ff6b35,#ffa070); }
+.prog-fill-bili{ background: linear-gradient(90deg,#00b5e2,#60d0f0); }
+.prog-fill-wx  { background: linear-gradient(90deg,#07c160,#50d88a); }
+
+/* 排行榜行高亮动画 */
+tbody tr.top3 { animation: fadeIn .3s ease both; }
+tbody tr.top3 td { border-left: 2px solid var(--accent); }
+
+/* 滚动条美化 */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(108,99,255,0.3); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(108,99,255,0.5); }
+
+/* 平台对比页 - 对比卡 */
+.cmp-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 16px; }
+.cmp-stat {
+  border-radius: 12px; padding: 14px 16px;
+  background: var(--bg2); border: 1px solid var(--border);
+}
+.cmp-stat-head { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; margin-bottom: 10px; }
+.cmp-stat-row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.cmp-stat-row:last-child { border-bottom: none; }
+.cmp-stat-row .label { color: var(--muted); }
+.cmp-stat-row .val { color: var(--text2); font-weight: 500; }
+
+/* ===== 区块标题 ===== */
+.sec-header { margin-bottom: 18px; }
+.sec-header h2 { font-size: 15px; font-weight: 600; }
+.sec-header p { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* ===== 加载遮罩 ===== */
+#loadingMask {
+  position: fixed; inset: 0;
+  background: rgba(8,12,20,0.92);
+  backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999; flex-direction: column; gap: 16px;
+}
+.loader-ring {
+  width: 44px; height: 44px;
+  border: 3px solid rgba(108,99,255,0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+.loader-text { font-size: 13px; color: var(--text2); }
+
+/* ===== 任务管理 ===== */
+.task-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 20px; }
+.task-stat-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+  padding: 18px 20px; position: relative; overflow: hidden; transition: border-color .2s, transform .2s;
+}
+.task-stat-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--stat-color, linear-gradient(90deg, #6c63ff, #3ecfcf)); border-radius: 14px 14px 0 0;
+}
+.task-stat-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+.task-stat-label { font-size: 11px; color: var(--muted); margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
+.task-stat-value { font-size: 28px; font-weight: 700; letter-spacing: -1px; color: var(--text); line-height: 1; }
+.task-stat-sub { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+/* 任务实时同步徽章 */
+.task-live-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px;
+  background: rgba(34,211,163,0.1); border: 1px solid rgba(34,211,163,0.25);
+  font-size: 11px; color: var(--green);
+}
+.task-live-badge .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: blink 2s infinite; }
+.task-live-badge.loading { background: rgba(245,166,35,0.1); border-color: rgba(245,166,35,0.25); color: var(--amber); }
+.task-live-badge.loading .live-dot { background: var(--amber); animation: blink .5s infinite; }
+.task-live-badge.error { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.25); color: var(--red); }
+.task-live-badge.error .live-dot { background: var(--red); animation: blink 1s infinite; }
+
+
+.task-filter-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.task-filter-bar input {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 14px; color: var(--text); font-size: 13px; outline: none; min-width: 220px;
+  transition: border-color .2s;
+}
+.task-filter-bar input:focus { border-color: var(--accent); }
+.task-filter-bar input::placeholder { color: var(--muted); }
+.task-chip {
+  padding: 5px 12px; border-radius: 20px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg3); color: var(--text2);
+  transition: all .2s; user-select: none;
+}
+.task-chip:hover { border-color: var(--border2); color: var(--text); }
+.task-chip.active { background: rgba(108,99,255,0.15); border-color: var(--accent); color: var(--accent); }
+
+.task-table-wrap { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.task-table-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.task-table-wrap thead th {
+  background: var(--bg3); padding: 12px 16px; text-align: left; font-size: 12px; font-weight: 600;
+  color: var(--text2); border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.task-table-wrap tbody td { padding: 12px 16px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+.task-table-wrap tbody tr:last-child td { border-bottom: none; }
+.task-table-wrap tbody tr { transition: background .15s; }
+.task-table-wrap tbody tr:hover { background: rgba(108,99,255,0.04); }
+.task-table-wrap tbody td:first-child { font-weight: 500; }
+.task-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 500;
+}
+.task-tag.video { background: rgba(254,44,85,0.1); color: #fe6b7a; border: 1px solid rgba(254,44,85,0.2); }
+.task-tag.wiki  { background: rgba(108,99,255,0.1); color: #a78bfa; border: 1px solid rgba(108,99,255,0.2); }
+.task-tag.article { background: rgba(62,207,207,0.1); color: #3ecfcf; border: 1px solid rgba(62,207,207,0.2); }
+.task-tag.live { background: rgba(7,193,96,0.1); color: #22d3a3; border: 1px solid rgba(7,193,96,0.2); }
+.task-tag.photo { background: rgba(245,166,35,0.1); color: #f5a623; border: 1px solid rgba(245,166,35,0.2); }
+.task-person {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 500;
+  background: rgba(255,255,255,0.05); color: var(--text2);
+}
+.task-person .avatar {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; color: #fff; font-weight: 600;
+}
+.task-feishu-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 8px;
+  background: rgba(62,130,246,0.1); border: 1px solid rgba(62,130,246,0.25);
+  color: #6ea8fe; font-size: 12px; font-weight: 500; text-decoration: none;
+  transition: all .2s;
+}
+.task-feishu-link:hover { background: rgba(62,130,246,0.18); border-color: #6ea8fe; }
+
+.task-status { font-weight: 600; }
+
+@media (max-width: 1024px) {
+  .task-stats { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .task-stat-value { font-size: 22px; }
+}
+@media (max-width: 768px) {
+  .task-stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .task-stat-value { font-size: 20px; }
+  .task-filter-bar input { min-width: 160px; width: 100%; }
+  .task-table-wrap { overflow-x: auto; }
+  .task-table-wrap table { min-width: 520px; }
+}
+
+/* F5: 移动端底部导航 */
+.bottom-nav {
+  display: none; position: fixed; bottom: 0; left: 0; right: 0;
+  background: rgba(8,12,20,0.96); backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border); z-index: 300;
+  padding: 6px 0 max(6px, env(safe-area-inset-bottom));
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
+}
+.bnav-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  font-size: 10px; color: var(--muted); cursor: pointer; padding: 4px 0;
+  transition: color .2s;
+}
+.bnav-item svg { transition: transform .2s; }
+.bnav-item.active { color: var(--accent); }
+.bnav-item.active svg { transform: scale(1.1); }
+@media (max-width: 768px) {
+  .bottom-nav { display: flex; }
+  .main { padding-bottom: 80px; }
+  .tabbar { display: none; }
+  .header { padding-left: 14px; padding-right: 14px; }
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+/* ===== 平台深度面板 ===== */
+.depth-panel { }
+.depth-kpi-sm .kpi-value { font-size: 22px; }
+
+/* ===== 响应式 ===== */
+@media (max-width: 1200px) {
+  .kpi-grid, .plat-kpi-grid { grid-template-columns: repeat(2,1fr); }
+  .charts-row { grid-template-columns: 1fr; }
+  .charts-row-3 { grid-template-columns: 1fr 1fr; }
+}
+/* ===== 热力图 ===== */
+.heatmap-wrap { padding: 8px 4px 12px; }
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: 72px repeat(4, 1fr);
+  gap: 3px;
+  align-items: stretch;
+}
+.heat-header {
+  display: contents;
+}
+.heat-header-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  padding: 8px 4px;
+  border-radius: 6px 6px 0 0;
+  background: rgba(255,255,255,0.03);
+  letter-spacing: 0.5px;
+}
+.heat-row {
+  display: contents;
+}
+.heat-cells {
+  display: contents;
+}
+.heat-label {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 10px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+.heat-cell {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  padding: 10px 2px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  position: relative;
+  overflow: hidden;
+  animation: waveIn 0.35s ease both;
+}
+.heat-cell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+  pointer-events: none;
+}
+.heat-cell:hover {
+  transform: scale(1.06);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  z-index: 2;
+}
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.heatmap-grad {
+  width: 160px;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(6,182,212,0.08), rgba(6,182,212,1));
+}
+
+/* ===== 品牌页脚 ===== */
+.brand-footer {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 28px 20px 20px; margin-top: 20px;
+  position: relative;
+}
+.brand-footer-line {
+  width: 60px; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
+  margin-bottom: 16px;
+}
+.brand-footer-logo {
+  height: 40px; width: auto;
+  opacity: 0.7; filter: grayscale(0.15);
+  transition: opacity .3s ease, filter .3s ease;
+}
+.brand-footer:hover .brand-footer-logo {
+  opacity: 0.95; filter: grayscale(0);
+}
+.brand-footer-text {
+  font-size: 11px; color: var(--muted);
+  margin-top: 10px; letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 768px) {
+  .header, .tabbar, .main { padding-left: 14px; padding-right: 14px; }
+  .kpi-grid, .plat-kpi-grid { grid-template-columns: 1fr 1fr; }
+  .charts-row-2, .charts-row-3, .cmp-stats { grid-template-columns: 1fr; }
+  .brand-sub { display: none; }
+  .heatmap-grid { grid-template-columns: 56px repeat(4, 1fr); gap: 2px; }
+  .heat-header-label { font-size: 11px; padding: 6px 2px; }
+  .heat-label { font-size: 10px; padding-right: 6px; }
+  .heat-cell { font-size: 10px; padding: 7px 1px; min-height: 32px; }
+  .brand-footer-logo { height: 32px; }
+  .brand-footer-text { font-size: 10px; letter-spacing: 1px; }
+}
+
+/* ════════════════════════════════════════════════════════
+   驾驶舱大屏模块（嵌入到仪表盘内部）
+════════════════════════════════════════════════════════ */
+#sec-cockpit { padding: 0; overflow: hidden; }
+#sec-cockpit .cockpit-inner {
+  position: relative;
+  width: 100vw;
+  margin-left: calc(-50vw + 50%);
+  background: #040810;
+  height: calc(100vh - 110px);
+  max-height: calc(100vh - 110px);
+  display: grid;
+  grid-template-columns: 260px 1fr 260px;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  padding: 10px;
+  color: #e0eeff;
+  font-size: 13px;
+  z-index: 1;
+}
+#sec-cockpit .cockpit-inner::before {
+  content: ''; position: absolute; top: -300px; left: -100px; width: 700px; height: 700px;
+  background: radial-gradient(circle, rgba(0,168,255,0.06) 0%, transparent 70%);
+  pointer-events: none; z-index: 0;
+}
+#sec-cockpit .cockpit-inner::after {
+  content: ''; position: absolute; bottom: -300px; right: -100px; width: 700px; height: 700px;
+  background: radial-gradient(circle, rgba(0,255,204,0.04) 0%, transparent 70%);
+  pointer-events: none; z-index: 0;
+}
+
+/* ── 扫描线 ── */
+#sec-cockpit .cockpit-scan {
+  position: fixed; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(0,168,255,0.15), transparent);
+  pointer-events: none; z-index: 999;
+  animation: cockpitScan 8s linear infinite;
+}
+@keyframes cockpitScan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+/* ── 顶栏 ── */
+#sec-cockpit .cockpit-top {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 20px;
+  background: linear-gradient(180deg, rgba(0,168,255,0.08) 0%, transparent 100%);
+  border: 1px solid rgba(0,168,255,0.12);
+  border-radius: 8px;
+  position: relative; z-index: 1;
+}
+#sec-cockpit .cockpit-top::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,168,255,0.5), rgba(0,255,204,0.3), transparent);
+}
+#sec-cockpit .cockpit-top-left { display: flex; align-items: center; gap: 10px; }
+#sec-cockpit .cockpit-top-logo { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 12px rgba(0,168,255,0.3); }
+#sec-cockpit .cockpit-top-title {
+  font-size: 18px; font-weight: 700; letter-spacing: 3px;
+  color: #00a8ff;
+  background: linear-gradient(90deg, #00a8ff, #00ffcc);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+#sec-cockpit .cockpit-top-sub { font-size: 11px; color: #3d6080; letter-spacing: 2px; }
+#sec-cockpit .cockpit-top-center { font-size: 11px; color: #3d6080; letter-spacing: 1px; position: absolute; left: 50%; transform: translateX(-50%); }
+#sec-cockpit .cockpit-top-right { display: flex; align-items: center; gap: 14px; }
+#sec-cockpit .cockpit-time { font-size: 22px; font-weight: 700; color: #00a8ff; font-variant-numeric: tabular-nums; letter-spacing: 2px; }
+#sec-cockpit .cockpit-date { font-size: 11px; color: #3d6080; text-align: right; line-height: 1.5; }
+
+/* ── 通用卡片 ── */
+#sec-cockpit .cockpit-card {
+  background: linear-gradient(135deg, rgba(6,14,26,0.97) 0%, rgba(10,22,40,0.93) 100%);
+  border: 1px solid rgba(0,168,255,0.14);
+  border-radius: 10px;
+  padding: 14px;
+  position: relative; overflow: visible; z-index: 1;
+  transition: border-color .3s, box-shadow .3s;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(0,168,255,0.08);
+}
+#sec-cockpit .cockpit-card:hover { border-color: rgba(0,168,255,0.3); box-shadow: 0 4px 20px rgba(0,168,255,0.12), inset 0 1px 0 rgba(0,168,255,0.1); }
+#sec-cockpit .cockpit-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,168,255,0.35), transparent);
+}
+#sec-cockpit .cockpit-card-title {
+  font-size: 10px; color: #3d6080; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#sec-cockpit .cockpit-card-value {
+  font-size: 30px; font-weight: 800;
+  color: #00a8ff; /* fallback for browsers that don't support background-clip */
+  background: linear-gradient(90deg, #00a8ff, #00d4ff);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.1;
+  filter: drop-shadow(0 0 8px rgba(0,168,255,0.4));
+}
+#sec-cockpit .cockpit-card-sub { font-size: 10px; color: #5a7a9a; margin-top: 6px; letter-spacing: 0.5px; }
+
+/* ── 环形进度 ── */
+#sec-cockpit .cockpit-ring { position: relative; width: 96px; height: 96px; margin: 10px auto 6px; }
+#sec-cockpit .cockpit-ring svg { transform: rotate(-90deg); width: 96px; height: 96px; }
+#sec-cockpit .cockpit-ring-bg { fill: none; stroke: rgba(0,168,255,0.1); stroke-width: 7; }
+#sec-cockpit .cockpit-ring-fill {
+  fill: none; stroke: url(#cockpitRingGrad); stroke-width: 7; stroke-linecap: round;
+  stroke-dasharray: 251; stroke-dashoffset: 251;
+  transition: stroke-dashoffset 1.5s cubic-bezier(.4,0,.2,1);
+  filter: drop-shadow(0 0 6px rgba(0,168,255,0.7));
+}
+#sec-cockpit .cockpit-ring-center {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  text-align: center;
+}
+#sec-cockpit .cockpit-ring-pct { font-size: 20px; font-weight: 800; color: #00a8ff; filter: drop-shadow(0 0 6px rgba(0,168,255,0.5)); }
+#sec-cockpit .cockpit-ring-label { font-size: 9px; color: #3d6080; letter-spacing: 1px; }
+
+/* ── 平台列表 ── */
+#sec-cockpit .cockpit-plat {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0; border-bottom: 1px solid rgba(0,168,255,0.06);
+}
+#sec-cockpit .cockpit-plat:last-child { border-bottom: none; }
+#sec-cockpit .cockpit-plat-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+#sec-cockpit .cockpit-plat-name { font-size: 11px; color: #7aa8cc; flex: 1; margin-left: 8px; }
+#sec-cockpit .cockpit-plat-val { font-size: 13px; font-weight: 700; color: #e0eeff; }
+#sec-cockpit .cockpit-plat-change { font-size: 10px; margin-left: 6px; font-weight: 600; }
+#sec-cockpit .cockpit-plat-change.up { color: #00ffcc; }
+#sec-cockpit .cockpit-plat-change.down { color: #ff4d4d; }
+
+/* ── 排行列表 ── */
+#sec-cockpit .cockpit-list {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 0; border-bottom: 1px solid rgba(0,168,255,0.05); font-size: 11px;
+}
+#sec-cockpit .cockpit-list:last-child { border-bottom: none; }
+#sec-cockpit .cockpit-rank {
+  width: 16px; height: 16px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; margin-right: 8px; flex-shrink: 0;
+}
+#sec-cockpit .cockpit-rank-1 { background: rgba(255,215,0,0.2); color: #ffd700; border: 1px solid rgba(255,215,0,0.3); }
+#sec-cockpit .cockpit-rank-2 { background: rgba(192,192,192,0.15); color: #c0c0c0; border: 1px solid rgba(192,192,192,0.25); }
+#sec-cockpit .cockpit-rank-3 { background: rgba(205,127,50,0.15); color: #cd7f32; border: 1px solid rgba(205,127,50,0.25); }
+#sec-cockpit .cockpit-rank-n { background: rgba(0,168,255,0.08); color: #3d6080; }
+#sec-cockpit .cockpit-list-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #7aa8cc; }
+#sec-cockpit .cockpit-list-val { font-weight: 600; color: #00a8ff; margin-left: 8px; font-variant-numeric: tabular-nums; }
+
+/* ── 进度条 ── */
+#sec-cockpit .cockpit-prog { margin-bottom: 10px; }
+#sec-cockpit .cockpit-prog:last-child { margin-bottom: 0; }
+#sec-cockpit .cockpit-prog-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+#sec-cockpit .cockpit-prog-name { font-size: 10px; color: #7aa8cc; }
+#sec-cockpit .cockpit-prog-val { font-size: 11px; font-weight: 700; color: #00a8ff; }
+#sec-cockpit .cockpit-prog-bar { height: 4px; border-radius: 2px; background: rgba(0,168,255,0.1); overflow: hidden; }
+#sec-cockpit .cockpit-prog-fill {
+  height: 100%; border-radius: 2px;
+  background: linear-gradient(90deg, #00a8ff, #00ffcc);
+  transition: width 1.2s cubic-bezier(.4,0,.2,1);
+  box-shadow: 0 0 6px rgba(0,168,255,0.4);
+}
+
+/* ── 布局 ── */
+#sec-cockpit .cockpit-left { display: flex; flex-direction: column; gap: 8px; z-index: 1; overflow-y: auto; scrollbar-width: none; min-width: 0; }
+#sec-cockpit .cockpit-left::-webkit-scrollbar { display: none; }
+#sec-cockpit .cockpit-center { display: flex; flex-direction: column; gap: 8px; z-index: 1; overflow: hidden; min-width: 0; }
+#sec-cockpit .cockpit-right { display: flex; flex-direction: column; gap: 8px; z-index: 1; overflow-y: auto; scrollbar-width: none; min-width: 0; }
+#sec-cockpit .cockpit-right::-webkit-scrollbar { display: none; }
+
+/* ── 地图 ── */
+#sec-cockpit .cockpit-map {
+  flex: 1; min-height: 0;
+  background: linear-gradient(135deg, rgba(6,14,26,0.97) 0%, rgba(10,22,40,0.93) 100%);
+  border: 1px solid rgba(0,168,255,0.14);
+  border-radius: 10px; padding: 14px; position: relative; overflow: hidden; z-index: 1;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(0,168,255,0.08);
+  display: flex; flex-direction: column;
+}
+#sec-cockpit .cockpit-map::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,168,255,0.35), transparent);
+}
+#sec-cockpit .cockpit-map-title {
+  font-size: 11px; color: #3d6080; letter-spacing: 2px; text-transform: uppercase;
+  margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+}
+#sec-cockpit .cockpit-map-title::before {
+  content: ''; display: inline-block; width: 3px; height: 12px; border-radius: 2px;
+  background: linear-gradient(180deg, #00a8ff, #00ffcc);
+}
+#sec-cockpit #cockpitMapChart { width: 100%; flex: 1; min-height: 0; }
+
+/* ── 底部图表 ── */
+#sec-cockpit .cockpit-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; z-index: 1; flex-shrink: 0; }
+#sec-cockpit .cockpit-chart-box {
+  background: linear-gradient(135deg, rgba(6,14,26,0.97) 0%, rgba(10,22,40,0.93) 100%);
+  border: 1px solid rgba(0,168,255,0.14);
+  border-radius: 10px; padding: 14px; position: relative; overflow: hidden; z-index: 1;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(0,168,255,0.08);
+}
+#sec-cockpit .cockpit-chart-box::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,168,255,0.3), transparent);
+}
+#sec-cockpit .cockpit-chart-title {
+  font-size: 10px; color: #3d6080; letter-spacing: 2px; text-transform: uppercase;
+  margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+}
+#sec-cockpit .cockpit-chart-title::before {
+  content: ''; display: inline-block; width: 3px; height: 10px; border-radius: 2px;
+  background: linear-gradient(180deg, #00a8ff, #00ffcc);
+}
+#sec-cockpit #cockpitTrendChart, #sec-cockpit #cockpitBarChart { width: 100%; height: 120px; }
+#sec-cockpit .cockpit-pie-wrap { width: 100%; height: 130px; }
+#sec-cockpit .cockpit-table-wrap { max-height: 200px; overflow-y: auto; }
+
+/* ── 热点选题建议 ── */
+#sec-cockpit .cockpit-trending-list { display: flex; flex-direction: column; gap: 0; }
+#sec-cockpit .cockpit-trending-item {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 7px 0; border-bottom: 1px solid rgba(0,168,255,0.06);
+  cursor: default; transition: background .2s;
+}
+#sec-cockpit .cockpit-trending-item:last-child { border-bottom: none; }
+#sec-cockpit .cockpit-trending-item:hover { background: rgba(0,168,255,0.04); border-radius: 6px; padding-left: 4px; padding-right: 4px; }
+#sec-cockpit .cockpit-trending-rank {
+  flex-shrink: 0; width: 18px; height: 18px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; line-height: 1;
+}
+#sec-cockpit .cockpit-trending-rank.top1 { background: rgba(255,215,0,0.2); color: #ffd700; border: 1px solid rgba(255,215,0,0.3); }
+#sec-cockpit .cockpit-trending-rank.top2 { background: rgba(192,192,192,0.15); color: #c0c0c0; border: 1px solid rgba(192,192,192,0.25); }
+#sec-cockpit .cockpit-trending-rank.top3 { background: rgba(205,127,50,0.15); color: #cd7f32; border: 1px solid rgba(205,127,50,0.25); }
+#sec-cockpit .cockpit-trending-rank.topn { background: rgba(0,168,255,0.08); color: #3d6080; }
+#sec-cockpit .cockpit-trending-body { flex: 1; min-width: 0; }
+#sec-cockpit .cockpit-trending-kw {
+  font-size: 12px; font-weight: 600; color: #b0d4f0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4;
+}
+#sec-cockpit .cockpit-trending-suggest {
+  font-size: 10px; color: #4a6880; line-height: 1.5; margin-top: 2px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+#sec-cockpit .cockpit-trending-meta {
+  display: flex; align-items: center; gap: 5px; margin-top: 3px;
+}
+#sec-cockpit .cockpit-trending-src {
+  font-size: 9px; padding: 1px 5px; border-radius: 3px;
+  background: rgba(0,168,255,0.12); color: #3d8aaa; border: 1px solid rgba(0,168,255,0.2);
+}
+#sec-cockpit .cockpit-trending-hot {
+  font-size: 9px; color: #3d5a70;
+  font-variant-numeric: tabular-nums;
+}
+#sec-cockpit .cockpit-trending-refresh {
+  display: flex; align-items: center; justify-content: flex-end; margin-top: 6px;
+}
+#sec-cockpit .cockpit-trending-btn {
+  font-size: 9px; color: #3d6080; cursor: pointer; padding: 2px 8px;
+  border: 1px solid rgba(0,168,255,0.15); border-radius: 4px;
+  background: rgba(0,168,255,0.06); transition: all .2s;
+}
+#sec-cockpit .cockpit-trending-btn:hover { color: #00a8ff; border-color: rgba(0,168,255,0.4); background: rgba(0,168,255,0.1); }
+#sec-cockpit .cockpit-trending-empty { font-size: 11px; color: #3d6080; text-align: center; padding: 16px 0; }
+
+/* ── 响应式 ── */
+@media (max-width: 1400px) {
+  #sec-cockpit .cockpit-inner { grid-template-columns: 220px 1fr 220px; }
+  #sec-cockpit .cockpit-card-value { font-size: 22px; }
+  #sec-cockpit .cockpit-ring { width: 70px; height: 70px; }
+}
+@media (max-width: 1100px) {
+  #sec-cockpit .cockpit-inner { grid-template-columns: 1fr; grid-template-rows: auto; }
+  #sec-cockpit .cockpit-left, #sec-cockpit .cockpit-right { flex-direction: row; flex-wrap: wrap; }
+  #sec-cockpit .cockpit-left > *, #sec-cockpit .cockpit-right > * { flex: 1 1 45%; }
+  #sec-cockpit .cockpit-bottom { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- 粒子背景 -->
+<canvas id="particles"></canvas>
+
+<!-- 加载骨架屏 -->
+<div id="loadingOverlay">
+  <div class="loader-spinner"></div>
+  <div class="loader-title">融媒体数据看板</div>
+  <div class="loader-sub">正在连接飞书 · 聚合四平台数据...</div>
+  <div class="loader-bar-wrap"><div class="loader-bar"></div></div>
+</div>
+
+<!-- 刷新成功提示 -->
+<div id="toast">✅ 数据已更新</div>
+
+<!-- 顶栏 -->
+<div class="header">
+  <div class="header-brand">
+    <img class="brand-logo" src="logo_emblem.png" alt="西北民族大学校徽" loading="eager">
+    <div class="brand-text">
+      <div class="brand-name">融媒体数据看板<span class="brand-divider"></span><span style="font-weight:500;color:var(--text2)">西北民族大学</span></div>
+      <div class="brand-sub">数据来源：飞书多维表 · 四平台实时汇总</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <!-- 数据健康状态 -->
+    <div class="health-badge" id="healthBadge" title="数据健康状态">
+      <span class="health-dot" id="healthDot"></span>
+      <span class="health-label" id="healthLabel">检测中</span>
+    </div>
+    <!-- 自动刷新倒计时 -->
+    <div class="auto-refresh-wrap" id="autoRefreshWrap">
+      <div class="auto-refresh-ring" id="refreshRing"></div>
+      <div class="auto-refresh-text" id="refreshCountdown">5:00</div>
+    </div>
+    <div class="live-badge"><div class="live-dot"></div>飞书实时</div>
+    <div class="hdr-time" id="updateTime">--</div>
+    <button class="btn-refresh" id="btnRefresh" onclick="reloadData()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      刷新数据
+    </button>
+    <!-- F6: 导出按钮 -->
+    <div class="export-wrap" id="exportWrap">
+      <button class="btn-export" onclick="toggleExportMenu()">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        导出
+      </button>
+      <div class="export-menu" id="exportMenu">
+        <div class="export-item" onclick="exportCSV('kpi')">📊 导出 KPI 汇总</div>
+        <div class="export-item" onclick="exportCSV('top20')">🏆 导出 Top20 排行</div>
+        <div class="export-item" onclick="exportCSV('trend')">📈 导出月度趋势</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 导航 -->
+<div class="tabbar">
+  <div class="tab active" onclick="switchTab('overview',this)">🏠 数据总览</div>
+  <div class="tab" onclick="switchTab('trend',this)">📈 趋势分析</div>
+  <div class="tab" onclick="switchTab('compare',this)">⚖️ 平台对比</div>
+  <div class="tab" onclick="switchTab('content',this)">🏆 爆款排行</div>
+  <div class="tab" onclick="switchTab('depth',this)">🔬 平台深度</div>
+  <div class="tab" onclick="switchTab('tasks',this)">📋 任务管理</div>
+  <div class="tab" onclick="switchTab('trending',this)">🔥 热点选题</div>
+  <div class="tab" onclick="switchTab('cockpit',this)" style="margin-left:auto;color:var(--blue);border-bottom-color:rgba(0,168,255,0.4)">🚀 驾驶舱</div>
+</div>
+
+<div class="main">
+
+<!-- ===================== 总览 ===================== -->
+<div id="sec-overview" class="section active">
+
+  <!-- AI 洞察 -->
+  <div class="insight-card" id="insightCard">
+    <div class="insight-icon">✨</div>
+    <div>
+      <div class="insight-title">数据洞察</div>
+      <div class="insight-text" id="insightText">正在加载数据...</div>
+    </div>
+  </div>
+
+  <!-- KPI 卡片 -->
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <!-- 平台卡片 -->
+  <div class="plat-kpi-grid" id="platGrid"></div>
+
+  <!-- 图表行：趋势折线 + 播放占比 -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">月度播放量趋势</div>
+          <div class="chart-desc">四平台月度累计播放次数</div>
+        </div>
+        <div class="filter-btns" id="trendBtns0">
+          <button class="fbtn" onclick="setRange(3,this,'trendBtns0')">近3月</button>
+          <button class="fbtn active" onclick="setRange(6,this,'trendBtns0')">近6月</button>
+          <button class="fbtn" onclick="setRange(99,this,'trendBtns0')">全部</button>
+        </div>
+      </div>
+      <div class="chart-legends">
+        <span class="leg"><span class="leg-line" style="background:var(--tt)"></span>抖音</span>
+        <span class="leg"><span class="leg-line" style="background:var(--wx)"></span>视频号</span>
+        <span class="leg"><span class="leg-line" style="background:var(--ks)"></span>快手</span>
+        <span class="leg"><span class="leg-line" style="background:var(--bili)"></span>B站</span>
+      </div>
+      <div class="chart-wrap-lg" style="margin-top:12px"><canvas id="overviewTrendChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">播放量占比</div>
+          <div class="chart-desc">各平台贡献分布</div>
+        </div>
+      </div>
+      <div class="chart-wrap" id="pieWrap" style="display:flex;align-items:center;justify-content:center;height:220px;position:relative;">
+        <canvas id="pieChart"></canvas>
+        <div id="pieCenterLabel" style="position:absolute;text-align:center;pointer-events:none;">
+          <div style="font-size:11px;color:var(--muted)">总播放</div>
+          <div style="font-size:20px;font-weight:700;color:var(--text)" id="pieCenterVal">-</div>
+        </div>
+      </div>
+      <div class="chart-legends" id="pieLeg" style="margin-top:8px;justify-content:center"></div>
+    </div>
+  </div>
+
+  <!-- 图表行：互动趋势 + 发布数 + 互动分布 -->
+  <div class="charts-row-3">
+    <div class="chart-card">
+      <div class="chart-head">
+        <div><div class="chart-title">月度互动趋势</div><div class="chart-desc">点赞+评论+分享合计</div></div>
+      </div>
+      <div class="chart-wrap-sm"><canvas id="interactChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <div><div class="chart-title">月度发布数量</div><div class="chart-desc">每月新增视频条数</div></div>
+      </div>
+      <div class="chart-wrap-sm"><canvas id="countChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <div><div class="chart-title">互动构成</div><div class="chart-desc">点赞 / 评论 / 分享 占比</div></div>
+      </div>
+      <div class="chart-wrap-sm"><canvas id="interactPieChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- F3: 月度×平台播放热力图 -->
+  <div class="chart-card charts-row-full" style="margin-bottom:16px">
+    <div class="chart-head">
+      <div>
+        <div class="chart-title">月度 × 平台 播放热力图</div>
+        <div class="chart-desc">颜色越深 = 播放量越高（点击单元格可查看详情）</div>
+      </div>
+      <div class="filter-btns" id="heatRangeBtns">
+        <button class="fbtn active" onclick="setHeatRange(6,this)">近6月</button>
+        <button class="fbtn" onclick="setHeatRange(12,this)">近12月</button>
+        <button class="fbtn" onclick="setHeatRange(99,this)">全部</button>
+      </div>
+    </div>
+    <div class="heatmap-wrap" id="heatmapWrap">
+      <div class="heatmap-grid" id="heatmapGrid"></div>
+      <div class="heatmap-legend">
+        <span style="font-size:10px;color:var(--muted)">低</span>
+        <div class="heatmap-grad"></div>
+        <span style="font-size:10px;color:var(--muted)">高</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 品牌页脚 -->
+  <footer class="brand-footer">
+    <div class="brand-footer-line"></div>
+    <img class="brand-footer-logo" src="logo_media_center.png" alt="西北民族大学融媒体中心" loading="lazy">
+    <p class="brand-footer-text">数据驱动传播 · 讲好民大故事</p>
+  </footer>
+
+</div>
+
+<!-- F5: 移动端底部导航 -->
+<div class="bottom-nav" id="bottomNav">
+  <div class="bnav-item active" onclick="bnavSwitch('overview',this)">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    <span>总览</span>
+  </div>
+  <div class="bnav-item" onclick="bnavSwitch('trend',this)">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    <span>趋势</span>
+  </div>
+  <div class="bnav-item" onclick="bnavSwitch('compare',this)">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    <span>对比</span>
+  </div>
+  <div class="bnav-item" onclick="bnavSwitch('content',this)">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+    <span>排行</span>
+  </div>
+  <div class="bnav-item" onclick="bnavSwitch('depth',this)">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <span>深度</span>
+  </div>
+  <div class="bnav-item" onclick="bnavSwitch('tasks',this)">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    <span>任务</span>
+  </div>
+</div>
+
+<!-- ===================== 趋势 ===================== -->
+<div id="sec-trend" class="section">
+  <div class="sec-header">
+    <h2>趋势分析</h2>
+    <p>基于视频发布日期统计各平台月度数据变化</p>
+  </div>
+
+  <div class="chart-card charts-row-full" style="margin-bottom:16px">
+    <div class="chart-head">
+      <div>
+        <div class="chart-title">四平台月度播放量对比</div>
+        <div class="chart-desc">纵轴单位：次；选择时间范围查看局部趋势</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div class="chart-legends">
+          <span class="leg"><span class="leg-line" style="background:var(--tt)"></span>抖音</span>
+          <span class="leg"><span class="leg-line" style="background:var(--ks)"></span>快手</span>
+          <span class="leg"><span class="leg-line" style="background:var(--bili)"></span>B站</span>
+          <span class="leg"><span class="leg-line" style="background:var(--wx)"></span>视频号</span>
+        </div>
+        <div class="filter-btns" id="trendBtns1">
+          <button class="fbtn" onclick="setRange(3,this,'trendBtns1')">近3月</button>
+          <button class="fbtn active" onclick="setRange(6,this,'trendBtns1')">近6月</button>
+          <button class="fbtn" onclick="setRange(99,this,'trendBtns1')">全部</button>
+        </div>
+      </div>
+    </div>
+    <div class="chart-wrap-xl"><canvas id="trendMainChart"></canvas></div>
+  </div>
+
+  <div class="charts-row-2">
+    <div class="chart-card">
+      <div class="chart-head">
+        <div><div class="chart-title">月均播放量 · 每条视频</div><div class="chart-desc">总播放 ÷ 当月发布数，反映单片效果</div></div>
+      </div>
+      <div class="chart-wrap"><canvas id="avgPlayChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <div><div class="chart-title">互动率趋势</div><div class="chart-desc">月度互动量 / 月度播放量 × 100%</div></div>
+      </div>
+      <div class="chart-wrap"><canvas id="engRateChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="charts-row-2">
+    <div class="chart-card">
+      <div class="chart-head">
+        <div><div class="chart-title">抖音 vs 视频号 走势</div><div class="chart-desc">主流平台月度播放量对比</div></div>
+        <div class="chart-legends">
+          <span class="leg"><span class="leg-line" style="background:var(--tt)"></span>抖音</span>
+          <span class="leg"><span class="leg-line" style="background:var(--wx)"></span>视频号</span>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="ttWxChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <div><div class="chart-title">B站 vs 快手 走势</div><div class="chart-desc">次级平台月度播放量对比</div></div>
+        <div class="chart-legends">
+          <span class="leg"><span class="leg-line" style="background:var(--bili)"></span>B站</span>
+          <span class="leg"><span class="leg-line" style="background:var(--ks)"></span>快手</span>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="biliKsChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 平台对比 ===================== -->
+<div id="sec-compare" class="section">
+  <div class="sec-header">
+    <h2>平台横向对比</h2>
+    <p>汇总全部已录入视频，对比四平台核心指标</p>
+  </div>
+
+  <!-- 平台卡片 -->
+  <div class="cmp-stats" id="cmpStatCards"></div>
+
+  <div class="charts-row-2">
+    <div class="chart-card">
+      <div class="chart-head">
+        <div><div class="chart-title">各平台播放量</div><div class="chart-desc">横向条形图 · 总播放量</div></div>
+      </div>
+      <div class="chart-wrap"><canvas id="cmpPlayChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <div><div class="chart-title">各平台点赞量</div><div class="chart-desc">横向条形图 · 累计点赞</div></div>
+      </div>
+      <div class="chart-wrap"><canvas id="cmpLikeChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="charts-row-2">
+    <div class="chart-card">
+      <div class="chart-head">
+        <div><div class="chart-title">综合能力雷达图</div><div class="chart-desc">播放/点赞/互动率/内容数 归一化评分</div></div>
+        <div class="chart-legends">
+          <span class="leg"><span class="leg-dot" style="background:var(--tt)"></span>抖音</span>
+          <span class="leg"><span class="leg-dot" style="background:var(--wx)"></span>视频号</span>
+          <span class="leg"><span class="leg-dot" style="background:var(--bili)"></span>B站</span>
+          <span class="leg"><span class="leg-dot" style="background:var(--ks)"></span>快手</span>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="radarChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <div><div class="chart-title">评论 vs 分享 对比</div><div class="chart-desc">两种深度互动类型的平台分布</div></div>
+        <div class="chart-legends">
+          <span class="leg"><span class="leg-dot" style="background:var(--accent2)"></span>评论</span>
+          <span class="leg"><span class="leg-dot" style="background:var(--pink)"></span>分享</span>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="cmpCsChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- 各平台贡献进度条 -->
+  <div class="chart-card">
+    <div class="chart-head"><div class="chart-title">各指标平台贡献比</div><div class="chart-desc">横向进度条直观展示各平台占比</div></div>
+    <div id="contribBars" style="display:grid;gap:12px;margin-top:4px;"></div>
+  </div>
+</div>
+
+<!-- ===================== 排行 ===================== -->
+<div id="sec-content" class="section">
+  <div class="tbl-ctrl">
+    <div>
+      <div class="tbl-title">爆款视频 Top 排行</div>
+      <div class="tbl-sub">按飞书实时数据排序，共展示前 20 条</div>
+    </div>
+    <div class="filter-btns">
+      <button class="fbtn active" id="sortPlayBtn" onclick="sortContent('play',this)">按播放量</button>
+      <button class="fbtn" id="sortInterBtn" onclick="sortContent('interact',this)">按互动量</button>
+      <button class="fbtn" id="sortComBtn" onclick="sortContent('comment',this)">按评论量</button>
+    </div>
+  </div>
+
+  <!-- 迷你指标 -->
+  <div class="kpi-grid" id="contentKpiGrid" style="margin-bottom:16px;"></div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:46px">排名</th>
+          <th>视频标题</th>
+          <th>发布时间</th>
+          <th style="color:var(--tt)">抖音播放</th>
+          <th style="color:var(--ks)">快手播放</th>
+          <th style="color:var(--bili)">B站播放</th>
+          <th style="color:var(--wx)">视频号播放</th>
+          <th>总播放</th>
+          <th>互动量</th>
+          <th>评论</th>
+          <th>分享</th>
+          <th>作者</th>
+        </tr>
+      </thead>
+      <tbody id="contentTbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===================== 平台深度 ===================== -->
+<div id="sec-depth" class="section">
+  <div class="sec-header">
+    <h2>平台深度分析</h2>
+    <p>直接来自各平台独立数据表，含完播率、涨粉量、收藏/投币/弹幕等独有指标</p>
+  </div>
+
+  <!-- 平台选择器 -->
+  <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;" id="depthPlatBtns">
+    <button class="fbtn active" onclick="switchDepth('douyin',this)" style="padding:8px 18px;font-size:12px">🎵 抖音</button>
+    <button class="fbtn" onclick="switchDepth('ks',this)" style="padding:8px 18px;font-size:12px">📹 快手</button>
+    <button class="fbtn" onclick="switchDepth('bili',this)" style="padding:8px 18px;font-size:12px">📺 B站</button>
+    <button class="fbtn" onclick="switchDepth('wx',this)" style="padding:8px 18px;font-size:12px">💚 视频号</button>
+    <div id="depthLoadingBadge" style="display:none;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-left:8px">
+      <div class="loader-ring" style="width:16px;height:16px;border-width:2px"></div>加载中...
+    </div>
+  </div>
+
+  <!-- 各平台面板 -->
+  <div id="depth-douyin" class="depth-panel">
+    <div class="kpi-grid" id="dy-kpi"></div>
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-head">
+          <div><div class="chart-title">月度播放量 & 粉丝增量</div><div class="chart-desc">抖音各月数据趋势</div></div>
+          <div class="chart-legends">
+            <span class="leg"><span class="leg-line" style="background:var(--tt)"></span>播放量</span>
+            <span class="leg"><span class="leg-line" style="background:var(--amber)"></span>粉丝增量</span>
+          </div>
+        </div>
+        <div class="chart-wrap-lg"><canvas id="dy-trend-chart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-head"><div><div class="chart-title">月均完播率趋势</div><div class="chart-desc">用户看完视频的比率</div></div></div>
+        <div class="chart-wrap"><canvas id="dy-finish-chart"></canvas></div>
+        <div style="margin-top:12px">
+          <div class="chart-head"><div class="chart-title" style="font-size:12px">月度点赞 / 评论 / 分享对比</div></div>
+          <div class="chart-wrap-sm"><canvas id="dy-engage-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="charts-row-2" style="margin-top:16px">
+      <div class="chart-card">
+        <div class="chart-head"><div class="chart-title">月度收藏量</div><div class="chart-desc">视频收藏量（长尾价值指标）</div></div>
+        <div class="chart-wrap-sm"><canvas id="dy-collect-chart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-head"><div class="chart-title">月度主页访问量</div><div class="chart-desc">播放转化为主页访问的量级</div></div>
+        <div class="chart-wrap-sm"><canvas id="dy-home-chart"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-card" style="margin-top:16px">
+      <div class="tbl-ctrl"><div><div class="tbl-title" style="font-size:13px">抖音播放 Top 20</div></div></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>排名</th><th>视频标题</th><th>发布日期</th><th style="color:var(--tt)">播放量</th><th>点赞</th><th>评论</th><th>分享</th><th>收藏</th><th>完播率</th><th>均播时长</th><th>粉丝增量</th></tr></thead>
+        <tbody id="dy-tbody"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div id="depth-ks" class="depth-panel" style="display:none">
+    <div class="kpi-grid" id="ks-kpi"></div>
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-head">
+          <div><div class="chart-title">月度播放量 & 粉丝增量</div><div class="chart-desc">快手各月数据趋势</div></div>
+          <div class="chart-legends">
+            <span class="leg"><span class="leg-line" style="background:var(--ks)"></span>播放量</span>
+            <span class="leg"><span class="leg-line" style="background:var(--amber)"></span>粉丝增量</span>
+          </div>
+        </div>
+        <div class="chart-wrap-lg"><canvas id="ks-trend-chart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-head"><div><div class="chart-title">月均完播率</div><div class="chart-desc">快手完播质量变化</div></div></div>
+        <div class="chart-wrap"><canvas id="ks-finish-chart"></canvas></div>
+        <div style="margin-top:12px">
+          <div class="chart-head"><div class="chart-title" style="font-size:12px">月度点赞 / 评论 / 收藏</div></div>
+          <div class="chart-wrap-sm"><canvas id="ks-engage-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="chart-card" style="margin-top:16px">
+      <div class="tbl-ctrl"><div><div class="tbl-title" style="font-size:13px">快手播放 Top 20</div></div></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>排名</th><th>视频标题</th><th>发布日期</th><th style="color:var(--ks)">播放量</th><th>点赞</th><th>评论</th><th>收藏</th><th>完播率</th><th>涨粉</th></tr></thead>
+        <tbody id="ks-tbody"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div id="depth-bili" class="depth-panel" style="display:none">
+    <div class="kpi-grid" id="bili-kpi"></div>
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-head">
+          <div><div class="chart-title">月度播放 & 粉丝增量</div><div class="chart-desc">B站各月数据趋势</div></div>
+          <div class="chart-legends">
+            <span class="leg"><span class="leg-line" style="background:var(--bili)"></span>播放量</span>
+            <span class="leg"><span class="leg-line" style="background:var(--amber)"></span>涨粉</span>
+          </div>
+        </div>
+        <div class="chart-wrap-lg"><canvas id="bili-trend-chart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-head"><div><div class="chart-title">投币 / 收藏 / 弹幕 / 转发</div><div class="chart-desc">B站深度互动指标（月度）</div></div></div>
+        <div class="chart-wrap"><canvas id="bili-deep-chart"></canvas></div>
+        <div style="margin-top:12px">
+          <div class="chart-head"><div class="chart-title" style="font-size:12px">月度点赞 / 评论对比</div></div>
+          <div class="chart-wrap-sm"><canvas id="bili-engage-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="chart-card" style="margin-top:16px">
+      <div class="tbl-ctrl"><div><div class="tbl-title" style="font-size:13px">B站播放 Top 20</div></div></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>排名</th><th>视频标题</th><th>发布日期</th><th style="color:var(--bili)">播放量</th><th>点赞</th><th>评论</th><th>投币</th><th>收藏</th><th>弹幕</th><th>转发</th><th>涨粉</th></tr></thead>
+        <tbody id="bili-tbody"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div id="depth-wx" class="depth-panel" style="display:none">
+    <div class="kpi-grid" id="wx-kpi"></div>
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-head">
+          <div><div class="chart-title">月度播放量 & 推荐量</div><div class="chart-desc">视频号各月数据趋势</div></div>
+          <div class="chart-legends">
+            <span class="leg"><span class="leg-line" style="background:var(--wx)"></span>播放量</span>
+            <span class="leg"><span class="leg-line" style="background:var(--accent2)"></span>推荐量</span>
+          </div>
+        </div>
+        <div class="chart-wrap-lg"><canvas id="wx-trend-chart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-head"><div><div class="chart-title">月均完播率</div><div class="chart-desc">视频号用户完播质量变化</div></div></div>
+        <div class="chart-wrap"><canvas id="wx-finish-chart"></canvas></div>
+        <div style="margin-top:12px">
+          <div class="chart-head"><div class="chart-title" style="font-size:12px">月度喜欢 / 评论 / 分享 / 转发聊天</div></div>
+          <div class="chart-wrap-sm"><canvas id="wx-engage-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="chart-card" style="margin-top:16px">
+      <div class="tbl-ctrl"><div><div class="tbl-title" style="font-size:13px">视频号播放 Top 20</div></div></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>排名</th><th>视频描述</th><th>发布日期</th><th style="color:var(--wx)">播放量</th><th>喜欢</th><th>评论</th><th>分享</th><th>转发聊天</th><th>完播率</th><th>均播时长</th><th>新增关注</th></tr></thead>
+        <tbody id="wx-tbody"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===================== 任务管理 ===================== -->
+<div id="sec-tasks" class="section">
+  <div class="sec-header">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <h2>📋 任务管理</h2>
+        <p>西北民大新媒体研究中心选题与任务分配总表，数据同步自飞书多维表格</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="task-live-badge" id="taskLiveBadge">
+          <span class="live-dot"></span>
+          <span>实时同步中</span>
+        </div>
+        <span style="font-size:11px;color:var(--muted)" id="taskUpdatedTime">—</span>
+        <button class="btn-refresh" style="padding:6px 12px;font-size:11px" onclick="reloadTaskData()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          刷新
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 统计卡片 -->
+  <div class="task-stats" id="taskStats">
+    <div class="task-stat-card" style="--stat-color:linear-gradient(90deg,#6c63ff,#3ecfcf)">
+      <div class="task-stat-label">📑 总选题数</div>
+      <div class="task-stat-value" id="taskTotalCount">—</div>
+      <div class="task-stat-sub" id="taskLiveSub">正在加载...</div>
+    </div>
+    <div class="task-stat-card" style="--stat-color:linear-gradient(90deg,#fe2c55,#ff6eb4)">
+      <div class="task-stat-label">🎬 视频</div>
+      <div class="task-stat-value" id="taskVideoCount">—</div>
+      <div class="task-stat-sub">短视频任务</div>
+    </div>
+    <div class="task-stat-card" style="--stat-color:linear-gradient(90deg,#6c63ff,#a78bfa)">
+      <div class="task-stat-label">✍️ 推文</div>
+      <div class="task-stat-value" id="taskArticleCount">—</div>
+      <div class="task-stat-sub">图文推文任务</div>
+    </div>
+    <div class="task-stat-card" style="--stat-color:linear-gradient(90deg,#07c160,#22d3a3)">
+      <div class="task-stat-label">✅ 已发布</div>
+      <div class="task-stat-value" id="taskPublishedCount">—</div>
+      <div class="task-stat-sub" id="taskPublishedSub">完成率 —</div>
+    </div>
+    <div class="task-stat-card" style="--stat-color:linear-gradient(90deg,#f5a623,#fbbf24)">
+      <div class="task-stat-label">🔥 进行中</div>
+      <div class="task-stat-value" id="taskOngoingCount">—</div>
+      <div class="task-stat-sub">正在推进</div>
+    </div>
+    <div class="task-stat-card" style="--stat-color:linear-gradient(90deg,#ef4444,#f87171)">
+      <div class="task-stat-label">⏸ 已停滞</div>
+      <div class="task-stat-value" id="taskStalledCount">—</div>
+      <div class="task-stat-sub">需关注跟进</div>
+    </div>
+  </div>
+
+  <!-- 筛选栏 -->
+  <div class="task-filter-bar">
+    <input type="text" id="taskSearch" placeholder="🔍 搜索选题、人员、内容编号..." oninput="filterTasks()">
+    <div class="task-chip active" onclick="filterTaskType('all',this)">全部</div>
+    <div class="task-chip" onclick="filterTaskType('视频',this)">视频</div>
+    <div class="task-chip" onclick="filterTaskType('推文',this)">推文</div>
+    <div class="task-chip" onclick="filterTaskType('百科词条',this)">百科词条</div>
+    <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
+    <div class="task-chip" onclick="filterTaskStatus('all',this)" title="按进展状态筛选">状态 ▾</div>
+    <div class="task-chip" onclick="filterTaskStatus('已发布',this)" style="color:var(--green)" title="已发布">✅已发布</div>
+    <div class="task-chip" onclick="filterTaskStatus('进行中',this)" style="color:#f5a623" title="进行中">🔥进行中</div>
+    <div class="task-chip" onclick="filterTaskStatus('已停滞',this)" style="color:var(--red)" title="已停滞">⏸已停滞</div>
+  </div>
+
+  <!-- 表格 -->
+  <div class="task-table-wrap" style="overflow-x:auto">
+    <table style="min-width:900px">
+      <thead>
+        <tr>
+          <th style="width:36px">#</th>
+          <th>选题名称</th>
+          <th style="width:70px">形式</th>
+          <th style="width:80px">牵头人</th>
+          <th style="width:80px">第一作者</th>
+          <th style="width:78px">进展</th>
+          <th style="width:100px">预计发布</th>
+          <th style="width:78px">完成日期</th>
+          <th style="width:70px">编号</th>
+        </tr>
+      </thead>
+      <tbody id="taskTbody">
+        <tr><td colspan="9" style="text-align:center;color:var(--muted);padding:60px 20px">
+          <div style="font-size:24px;margin-bottom:8px">⏳</div>
+          <div style="font-size:13px">正在从飞书同步任务数据...</div>
+        </td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 飞书链接 -->
+  <div style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+    <a href="https://ocn1yr8r497o.feishu.cn/base/MK1XbOu2lahiTSsEsUzc4XXLnKc" target="_blank" class="task-feishu-link">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      在飞书中查看完整表格
+    </a>
+    <span style="font-size:11px;color:var(--muted)" id="taskFooterNote">每5分钟自动刷新</span>
+  </div>
+</div>
+
+<!-- ===================== 热点选题建议 ===================== -->
+<div id="sec-trending" class="section">
+  <div class="chart-card" style="max-width:860px;margin:0 auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--text);">🔥 热点选题建议</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px;">实时热搜 · 结合高校融媒视角，为内容创作提供选题参考</div>
+      </div>
+      <button id="trendingPageRefreshBtn" onclick="refreshTrendingPage()" style="font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid rgba(0,168,255,0.3);background:rgba(0,168,255,0.06);color:#00a8ff;cursor:pointer;transition:all .2s;">↻ 刷新热搜</button>
+    </div>
+    <div id="trendingPageList" style="display:flex;flex-direction:column;gap:0;">
+      <div style="font-size:12px;color:var(--muted);text-align:center;padding:32px 0;">加载中...</div>
+    </div>
+    <div style="margin-top:12px;display:flex;align-items:center;gap:8px;">
+      <span style="font-size:11px;color:var(--muted);" id="trendingPageTime"></span>
+      <span style="font-size:11px;color:var(--muted);">· 数据来源：百度热搜 / 微博热搜</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 驾驶舱大屏 ===================== -->
+<div id="sec-cockpit" class="section">
+
+  <!-- 扫描线 -->
+  <div class="cockpit-scan"></div>
+
+  <!-- SVG 渐变定义 -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <linearGradient id="cockpitRingGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#00a8ff"/>
+        <stop offset="100%" stop-color="#00ffcc"/>
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <div class="cockpit-inner">
+
+    <!-- ══════ 顶部标题栏 ══════ -->
+    <div class="cockpit-top">
+      <div class="cockpit-top-left">
+        <img class="cockpit-top-logo" src="logo_emblem.png" alt="校徽">
+        <div>
+          <div class="cockpit-top-title">融媒体数据驾驶舱</div>
+          <div class="cockpit-top-sub">NORTHWEST MINZU UNIVERSITY · MEDIA DATA COCKPIT</div>
+        </div>
+      </div>
+      <div class="cockpit-top-center">西北民族大学融媒体中心 · 数据驱动传播</div>
+      <div class="cockpit-top-right">
+        <div>
+          <div class="cockpit-time" id="cockpitClock">00:00:00</div>
+          <div class="cockpit-date" id="cockpitDate">0000年00月00日 星期零</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ 左侧面板 ══════ -->
+    <div class="cockpit-left">
+
+      <!-- 视频总数 + 环形进度 -->
+      <div class="cockpit-card">
+        <div class="cockpit-card-title">视频总量</div>
+        <div class="cockpit-card-value" id="cockpitKpiTotal">—</div>
+        <div class="cockpit-card-sub">累计发布视频 · 覆盖四平台</div>
+        <div class="cockpit-ring">
+          <svg viewBox="0 0 90 90" width="90" height="90">
+            <circle class="cockpit-ring-bg" cx="45" cy="45" r="40"/>
+            <circle class="cockpit-ring-fill" id="cockpitRingProgress" cx="45" cy="45" r="40"/>
+          </svg>
+          <div class="cockpit-ring-center">
+            <div class="cockpit-ring-pct" id="cockpitRingPct">0%</div>
+            <div class="cockpit-ring-label">发布率</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 总粉丝 -->
+      <div class="cockpit-card">
+        <div class="cockpit-card-title">累计粉丝</div>
+        <div class="cockpit-card-value" id="cockpitKpiFans">—</div>
+        <div class="cockpit-card-sub">四平台粉丝总量</div>
+      </div>
+
+      <!-- 总互动 -->
+      <div class="cockpit-card">
+        <div class="cockpit-card-title">累计互动</div>
+        <div class="cockpit-card-value" id="cockpitKpiInteract">—</div>
+        <div class="cockpit-card-sub">点赞+评论+分享+收藏</div>
+      </div>
+
+      <!-- 平台分布 -->
+      <div class="cockpit-card">
+        <div class="cockpit-card-title">平台粉丝分布</div>
+        <div id="cockpitPlatDistChart" class="cockpit-pie-wrap"></div>
+      </div>
+
+      <!-- 各平台数据 -->
+      <div class="cockpit-card">
+        <div class="cockpit-card-title">平台数据</div>
+        <div id="cockpitPlatStatsList"></div>
+      </div>
+
+    </div>
+
+    <!-- ══════ 中间面板 ══════ -->
+    <div class="cockpit-center">
+
+      <!-- 3D 中国地图 -->
+      <div class="cockpit-map">
+        <div class="cockpit-map-title">内容传播地域分布 · CONTENT DISTRIBUTION</div>
+        <div id="cockpitMapChart"></div>
+      </div>
+
+      <!-- 底部图表 -->
+      <div class="cockpit-bottom">
+        <div class="cockpit-chart-box">
+          <div class="cockpit-chart-title">月度播放趋势 · MONTHLY TREND</div>
+          <div id="cockpitTrendChart"></div>
+        </div>
+        <div class="cockpit-chart-box">
+          <div class="cockpit-chart-title">平台播放对比 · PLATFORM COMPARE</div>
+          <div id="cockpitBarChart"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══════ 右侧面板 ══════ -->
+    <div class="cockpit-right">
+
+      <!-- 平台互动分布（替代无数据的"内容类型分布"） -->
+      <div class="cockpit-card">
+        <div class="cockpit-card-title">平台互动分布</div>
+        <div id="cockpitTypePieChart" class="cockpit-pie-wrap"></div>
+      </div>
+
+      <!-- 完播率指标 -->
+      <div class="cockpit-card">
+        <div class="cockpit-card-title">核心质量指标</div>
+        <div id="cockpitQualityMetrics"></div>
+      </div>
+
+      <!-- 热门视频 TOP5 -->
+      <div class="cockpit-card" style="flex:1">
+        <div class="cockpit-card-title">热门视频 TOP5</div>
+        <div class="cockpit-table-wrap" id="cockpitTopVideoList"></div>
+      </div>
+
+      <!-- TOP5 任务进展 -->
+      <div class="cockpit-card">
+        <div class="cockpit-card-title">任务进展 TOP5</div>
+        <div id="cockpitTaskProgressList"></div>
+      </div>
+
+      <!-- 热点选题建议 -->
+      <div class="cockpit-card" style="flex:1">
+        <div class="cockpit-card-title" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>热点选题建议</span>
+          <span class="cockpit-trending-btn" id="cockpitTrendingRefreshBtn" onclick="refreshCockpitTrending()">↻ 刷新</span>
+        </div>
+        <div id="cockpitTrendingList" class="cockpit-trending-list">
+          <div class="cockpit-trending-empty">加载中...</div>
+        </div>
+        <div class="cockpit-trending-refresh">
+          <span id="cockpitTrendingTime" style="font-size:9px;color:#2a4050;"></span>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+</div><!-- main -->
+
+<!-- 加载遮罩 -->
+<div id="loadingMask">
+  <div class="loader-ring"></div>
+  <div class="loader-text">正在从飞书同步最新数据...</div>
+</div>
+
+<script>
+// ─── 配置 ─────────────────────────────────────────
+const API_BASE = 'http://localhost:8765';
+
+// ─── 全局状态 ─────────────────────────────────────
+let D = null;  // 完整数据
+let PD = null; // 平台深度数据
+let charts = {};  // 所有 chart 实例
+let trendRange0 = 6;   // 总览页范围
+let trendRange1 = 6;   // 趋势页范围
+let currentSort = 'play';
+
+// ─── 粒子背景 ──────────────────────────────────────
+(function() {
+  const canvas = document.getElementById('particles');
+  if (!canvas || !canvas.getContext) return; // 防御：无canvas则跳过
+  const ctx = canvas.getContext('2d');
+  let W, H, particles = [];
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // 生成粒子：平台品牌色 + 科技紫蓝
+  const PALETTE = [
+    { c: '108,99,255', w: 0.3 },  // 紫色
+    { c: '62,207,207',  w: 0.3 },  // 青色
+    { c: '254,44,85',   w: 0.1 },  // 抖音红
+    { c: '255,107,53',  w: 0.1 },  // 快手橙
+    { c: '0,181,226',   w: 0.1 },  // B站蓝
+    { c: '7,193,96',    w: 0.1 },  // 视频号绿
+  ];
+  function pickColor() {
+    const r = Math.random();
+    let sum = 0;
+    for (const p of PALETTE) {
+      sum += p.w;
+      if (r < sum) return p.c;
+    }
+    return PALETTE[PALETTE.length - 1].c;
+  }
+
+  function spawn() {
+    particles = [];
+    const count = Math.floor(W * H / 18000);
+    for (let i = 0; i < count; i++) {
+      const spd = Math.random() * 0.4 + 0.1; // 速度差异
+      particles.push({
+        x: Math.random() * W, y: Math.random() * H,
+        r: Math.random() * 2 + 0.3,
+        vx: (Math.random() - 0.5) * spd,
+        vy: (Math.random() - 0.5) * spd,
+        alpha: Math.random() * 0.4 + 0.04,
+        color: pickColor(),
+        pulse: Math.random() * Math.PI * 2, // 相位偏移
+        sizeDir: Math.random() > 0.7 ? 1 : 0, // 0.3的概率会脉冲
+      });
+    }
+  }
+  spawn();
+
+  let t = 0;
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    t += 0.008;
+    particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+      if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+      // 脉冲粒子：半径随时间呼吸
+      let r = p.r;
+      if (p.sizeDir) r = p.r * (1 + 0.35 * Math.sin(t * 1.5 + p.pulse));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${p.color},${p.alpha})`;
+      ctx.fill();
+    });
+    // 粒子连线（距离 < 110px，连线透明度随距离渐变）
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 110) {
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = `rgba(108,99,255,${0.1 * (1 - dist/110)})`;
+          ctx.lineWidth = 0.6;
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+  // 窗口大小变化时重生成
+  window.addEventListener('resize', () => { resize(); spawn(); });
+})();
+
+// ─── 数字滚动计数器 ─────────────────────────────────
+function counterUp(el, target, duration, suffix) {
+  if (!el) return;
+  suffix = suffix || '';
+  const start = 0;
+  const startTime = performance.now();
+  function easeOutQuart(t) { return 1 - Math.pow(1 - t, 4); }
+  function step(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const current = Math.round(easeOutQuart(progress) * target);
+    el.textContent = fmt(current) + suffix;
+    if (progress < 1) requestAnimationFrame(step);
+    else el.textContent = fmt(target) + suffix;
+  }
+  requestAnimationFrame(step);
+}
+
+// ─── 数字计数器（带小数）─────────────────────────────
+function counterUpFloat(el, target, duration, decimals, suffix) {
+  if (!el) return;
+  suffix = suffix || '';
+  const startTime = performance.now();
+  function easeOutQuart(t) { return 1 - Math.pow(1 - t, 4); }
+  function step(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const current = (easeOutQuart(progress) * target).toFixed(decimals);
+    el.textContent = current + suffix;
+    if (progress < 1) requestAnimationFrame(step);
+    else el.textContent = target.toFixed(decimals) + suffix;
+  }
+  requestAnimationFrame(step);
+}
+
+// ─── 显示 Toast 提示 ────────────────────────────────
+function showToast(msg, duration) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration || 2500);
+}
+
+// ─── F4：数据健康状态指示器 ────────────────────────
+function updateHealthStatus() {
+  const badge = document.getElementById('healthBadge');
+  const dot   = document.getElementById('healthDot');
+  const label = document.getElementById('healthLabel');
+  if (!badge || !D || !D.updated_at) return;
+  const minsAgo = (Date.now() - new Date(D.updated_at).getTime()) / 60000;
+  badge.classList.remove('ok', 'warn', 'err');
+  if (minsAgo < 10) {
+    badge.classList.add('ok');
+    label.textContent = '数据正常';
+  } else if (minsAgo < 30) {
+    badge.classList.add('warn');
+    label.textContent = `延迟${Math.round(minsAgo)}分钟`;
+  } else {
+    badge.classList.add('err');
+    label.textContent = '数据异常';
+  }
+}
+
+// ─── F7：自动刷新倒计时 ───────────────────────────
+const AUTO_REFRESH_SEC = 300; // 5分钟
+let refreshCountdown = AUTO_REFRESH_SEC;
+let refreshTimerId = null;
+let lastRefreshTime = 0;
+
+function formatCountdown(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function startRefreshTimer() {
+  clearInterval(refreshTimerId);
+  refreshCountdown = AUTO_REFRESH_SEC;
+  lastRefreshTime = Date.now();
+  const ring = document.getElementById('refreshRing');
+  if (ring) ring.classList.remove('spinning');
+  updateCountdownDisplay();
+  refreshTimerId = setInterval(() => {
+    refreshCountdown--;
+    updateCountdownDisplay();
+    if (refreshCountdown <= 0) {
+      // 到达0时执行自动刷新（用户无感知）
+      clearInterval(refreshTimerId);
+      const ring = document.getElementById('refreshRing');
+      if (ring) ring.classList.add('spinning');
+      reloadData();
+    }
+  }, 1000);
+}
+
+function updateCountdownDisplay() {
+  const el = document.getElementById('refreshCountdown');
+  if (el) el.textContent = formatCountdown(refreshCountdown);
+}
+
+// ─── 隐藏骨架屏 ─────────────────────────────────────
+function hideLoading() {
+  const overlay = document.getElementById('loadingOverlay');
+  if (overlay) {
+    overlay.classList.add('hidden');
+    setTimeout(() => overlay.remove(), 600);
+  }
+}
+// ─── 工具函数 ──────────────────────────────────────
+function fmt(n) {
+  n = Number(n) || 0;
+  if (n >= 100000000) return (n/100000000).toFixed(2) + '亿';
+  if (n >= 10000) return (n/10000).toFixed(1) + '万';
+  return Math.round(n).toLocaleString();
+}
+function fmtFull(n) {
+  return Math.round(Number(n)||0).toLocaleString();
+}
+
+// F6: CSV 导出 ───────────────────────────────────
+function toggleExportMenu() {
+  const m = document.getElementById('exportMenu');
+  m.classList.toggle('show');
+  // 点击外部关闭
+  const close = (e) => { if (!document.getElementById('exportWrap').contains(e.target)) { m.classList.remove('show'); document.removeEventListener('click', close); } };
+  setTimeout(() => document.addEventListener('click', close), 0);
+}
+
+function downloadCSV(rows, filename) {
+  if (!rows || !rows.length) { showToast('⚠️ 暂无数据可导出'); return; }
+  const header = Object.keys(rows[0]);
+  const lines = [
+    header.join(','),
+    ...rows.map(r => header.map(k => {
+      const v = r[k] ?? '';
+      return typeof v === 'string' && (v.includes(',') || v.includes('"') || v.includes('\n'))
+        ? `"${v.replace(/"/g, '""')}"` : v;
+    }).join(','))
+  ];
+  const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename + '_' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  showToast(`✅ ${filename}.csv 已下载`);
+}
+
+function exportCSV(type) {
+  if (!D) return;
+  document.getElementById('exportMenu').classList.remove('show');
+  if (type === 'kpi') {
+    downloadCSV([{
+      '指标': '累计总播放量', '数值': D.total_play,
+      '指标2': '累计总互动量', '数值2': D.total_interact,
+      '指标3': '累计评论量', '数值3': D.total_comment || 0,
+      '指标4': '综合互动率', '数值4': D.total_play ? (D.total_interact/D.total_play*100).toFixed(2)+'%' : '0%',
+      '指标5': '累计涨粉量', '数值5': D.total_fan || 0,
+      '抖音播放': D.plat_play?.douyin||0, '快手播放': D.plat_play?.ks||0,
+      'B站播放': D.plat_play?.bili||0, '视频号播放': D.plat_play?.wx||0,
+      '数据更新时间': D.updated_at || ''
+    }], '融媒体看板_KPI汇总');
+  } else if (type === 'top20') {
+    const rows = (D.top20 || []).map((v, i) => ({
+      '排名': i+1, '标题': v.title||'', '平台': {douyin:'抖音',ks:'快手',bili:'B站',wx:'视频号'}[v.plat]||v.plat||'',
+      '月份': v.month||'', '抖音播放': v.douyin_play||0, '快手播放': v.ks_play||0,
+      'B站播放': v.bili_play||0, '视频号播放': v.wx_play||0,
+      '总播放量': v.total_play||0, '互动量': v.total_interact||0,
+      '评论量': v.total_comment||0, '分享量': v.total_share||0,
+    }));
+    downloadCSV(rows, '融媒体看板_Top20排行');
+  } else if (type === 'trend') {
+    const labels = D.trend_labels || [];
+    const rows = labels.map((m, i) => ({
+      '月份': m,
+      '抖音播放': D.trend_douyin?.[i]||0, '快手播放': D.trend_ks?.[i]||0,
+      'B站播放': D.trend_bili?.[i]||0, '视频号播放': D.trend_wx?.[i]||0,
+      '总播放': (D.trend_douyin?.[i]||0)+(D.trend_ks?.[i]||0)+(D.trend_bili?.[i]||0)+(D.trend_wx?.[i]||0),
+      '总互动': D.trend_interact?.[i]||0, '发布数量': D.trend_count?.[i]||0,
+    }));
+    downloadCSV(rows, '融媒体看板_月度趋势');
+  }
+}
+
+function fmtDate(ts) {
+  if (!ts) return '-';
+  const d = new Date(Number(ts));
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+}
+function pct(a, b) {
+  if (!b) return '0%';
+  return (a / b * 100).toFixed(1) + '%';
+}
+function pctNum(a, b) {
+  if (!b) return 0;
+  return Math.round(a / b * 100);
+}
+function destroyChart(key) {
+  if (charts[key]) { charts[key].destroy(); charts[key] = null; }
+}
+
+// ─── 通用 Chart 选项 ──────────────────────────────
+function baseOpts(extra = {}) {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 600 },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1c2540',
+        borderColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1,
+        titleColor: '#e2e8f8',
+        bodyColor: '#a0aec8',
+        padding: 10,
+        cornerRadius: 8,
+      }
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(255,255,255,0.04)' },
+        ticks: { color: '#5a6888', font: { size: 10 } }
+      },
+      y: {
+        grid: { color: 'rgba(255,255,255,0.04)' },
+        ticks: { color: '#5a6888', font: { size: 10 } }
+      }
+    },
+    ...extra
+  };
+}
+
+// ─── Tab 切换 ─────────────────────────────────────
+function switchTab(id, el) {
+  const sec = document.getElementById('sec-' + id);
+  document.querySelectorAll('.section').forEach(s => {
+    s.style.opacity = '0';
+    s.style.transform = 'translateY(6px)';
+    s.classList.remove('active');
+  });
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+
+  // 等前一个面板淡出，再淡入新的
+  setTimeout(() => {
+    sec.classList.add('active');
+    sec.style.transition = 'opacity .3s ease, transform .3s ease';
+    sec.style.opacity = '1';
+    sec.style.transform = 'translateY(0)';
+
+    // 重触进入动画：重新设置 animation，清除后重新触发
+    sec.querySelectorAll('.chart-card').forEach((card, i) => {
+      card.style.animation = 'none';
+      card.offsetHeight; // 强制重排，触发重绘
+      card.style.animation = `fadeSlideUp 0.45s ease ${i * 0.1 + 0.1}s both`;
+    });
+  }, 50);
+
+  // F5: 同步底部导航
+  document.querySelectorAll('.bnav-item').forEach(n => n.classList.remove('active'));
+  const bnavMap = { overview:'总览', trend:'趋势', compare:'对比', content:'排行', depth:'深度', tasks:'任务', trending:'热点', cockpit:'驾驶舱' };
+  document.querySelectorAll('.bnav-item').forEach(n => {
+    if (n.querySelector('span')?.textContent === bnavMap[id]) n.classList.add('active');
+  });
+  if (id === 'trend' && D) renderTrendSection();
+  if (id === 'compare' && D) renderCompareSection();
+  if (id === 'content' && D) renderContentSection();
+  if (id === 'depth' && !PD) loadPlatformData(false);
+  if (id === 'tasks') {
+    updateTaskStats();
+    renderTasksSection();
+  }
+  if (id === 'trending') renderTrendingPage();
+  if (id === 'cockpit') {
+    initCockpit();
+    // 切换到驾驶舱时，延迟 resize 确保容器尺寸已计算
+    setTimeout(() => {
+      Object.values(_cockpitCharts).forEach(c => { if (c && c.resize) c.resize(); });
+    }, 100);
+  }
+}
+
+// F5: 底部导航切换
+function bnavSwitch(id, el) {
+  // 找到顶部对应的 tab 并触发
+  document.querySelectorAll('.tab').forEach(t => {
+    if (t.textContent.includes({ overview:'总览', trend:'趋势', compare:'对比', content:'排行', depth:'深度', tasks:'任务' }[id])) {
+      switchTab(id, t);
+    }
+  });
+}
+
+// ─── 范围筛选 ─────────────────────────────────────
+function setRange(n, btn, groupId) {
+  document.querySelectorAll('#' + groupId + ' .fbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (groupId === 'trendBtns0') { trendRange0 = n; rebuildTrend0(); }
+  if (groupId === 'trendBtns1') { trendRange1 = n; rebuildTrend1(); }
+}
+
+// ─── 数据加载 ─────────────────────────────────────
+async function loadData(force = false) {
+  const url = force ? `${API_BASE}/api/refresh` : `${API_BASE}/api/dashboard`;
+  // 30 秒超时保护
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    D = data;
+    renderAll();
+  } finally {
+    hideLoading(); // 无论成功或失败都隐藏骨架屏
+  }
+}
+
+async function reloadData() {
+  // F7: 重置自动刷新倒计时
+  clearInterval(refreshTimerId);
+  const ring = document.getElementById('refreshRing');
+  if (ring) ring.classList.add('spinning');
+  const btn = document.getElementById('btnRefresh');
+  btn.classList.add('spinning');
+  btn.disabled = true;
+  try {
+    // 并行拉取平台数据 + 任务数据
+    await Promise.all([
+      loadData(true),
+      fetchTaskData(true).then(() => {
+        // 如果当前在任务 Tab，同步更新视图
+        if (document.getElementById('sec-tasks').classList.contains('active')) {
+          updateTaskStats();
+          renderTasksSection();
+        }
+        const badge = document.getElementById('taskLiveBadge');
+        const timeEl = document.getElementById('taskUpdatedTime');
+        if (badge) badge.classList.remove('loading');
+        if (timeEl) timeEl.textContent = '更新：' + new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      }).catch(() => {
+        const badge = document.getElementById('taskLiveBadge');
+        if (badge) { badge.classList.remove('loading'); badge.classList.add('error'); }
+      })
+    ]);
+    showToast('✅ 数据已更新 · ' + (D.updated_at || ''));
+    // 数据更新闪烁：KPI 卡片依次亮一下
+    document.querySelectorAll('.kpi-card').forEach((card, i) => {
+      setTimeout(() => {
+        card.style.animation = 'none';
+        card.offsetHeight;
+        card.style.animation = 'dataFlash .6s ease, popIn .4s ease';
+        setTimeout(() => {
+          card.style.animation = '';
+        }, 1000);
+      }, i * 60);
+    });
+    // 平台条也闪一下
+    document.querySelectorAll('.plat-bar').forEach((bar, i) => {
+      bar.style.transition = 'none';
+      bar.style.boxShadow = '0 0 12px 3px rgba(108,99,255,0.5)';
+      setTimeout(() => {
+        bar.style.transition = 'box-shadow .5s ease';
+        bar.style.boxShadow = '';
+      }, 400 + i * 80);
+    });
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>已同步`;
+    // F7: 成功后重启倒计时
+    startRefreshTimer();
+    setTimeout(() => {
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>刷新数据`;
+      btn.disabled = false;
+      btn.classList.remove('spinning');
+    }, 2500);
+  } catch(e) {
+    if (ring) ring.classList.remove('spinning');
+    btn.textContent = '❌ 失败';
+    btn.classList.remove('spinning');
+    showToast('❌ 数据同步失败，请检查服务是否运行');
+    setTimeout(() => {
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>刷新数据`;
+      btn.disabled = false;
+    }, 3000);
+  }
+}
+
+// ─── 全量渲染 ─────────────────────────────────────
+function renderAll() {
+  document.getElementById('updateTime').textContent = '更新：' + (D.updated_at || '--');
+  renderInsight();
+  renderKpiGrid();
+  renderPlatGrid();
+  rebuildTrend0();
+  renderPieChart();
+  renderInteractChart();
+  renderCountChart();
+  renderInteractPie();
+  // F3: 热力图
+  renderHeatmap();
+  // F4: 更新数据健康状态
+  updateHealthStatus();
+  // 如果当前 tab 已激活，立即渲染那个 section
+  if (document.getElementById('sec-trend').classList.contains('active')) renderTrendSection();
+  if (document.getElementById('sec-compare').classList.contains('active')) renderCompareSection();
+  if (document.getElementById('sec-content').classList.contains('active')) renderContentSection();
+}
+
+// ─── 洞察文本 ─────────────────────────────────────
+function renderInsight() {
+  const d = D;
+  const topPlat = Object.entries(d.plat_play).sort((a,b)=>b[1]-a[1]);
+  const nameMap = { douyin:'抖音', ks:'快手', bili:'B站', wx:'视频号' };
+  const top1 = nameMap[topPlat[0][0]];
+  const top1pct = (topPlat[0][1] / d.total_play * 100).toFixed(0);
+  const avgPlay = d.total_videos ? Math.round(d.total_play / d.total_videos) : 0;
+  const engRate = d.total_play ? (d.total_interact / d.total_play * 100).toFixed(2) : '0';
+  const latestMonthData = d.trend_labels && d.trend_labels.length
+    ? `最近月份（${d.trend_labels[d.trend_labels.length-1]}）发布 <strong>${d.trend_count[d.trend_count.length-1]}</strong> 条视频；`
+    : '';
+  document.getElementById('insightText').innerHTML =
+    `累计收录 <strong>${d.total_videos}</strong> 条视频，跨抖音、快手、B站、视频号四平台合计播放 <strong>${fmt(d.total_play)}</strong> 次。` +
+    `<strong>${top1}</strong> 是最大流量来源，贡献 <strong>${top1pct}%</strong> 播放量；` +
+    `单条视频均值播放 <strong>${fmt(avgPlay)}</strong> 次，综合互动率约 <strong>${engRate}%</strong>。` +
+    latestMonthData +
+    `总互动（点赞+评论+分享）达 <strong>${fmt(d.total_interact)}</strong> 次。`;
+}
+
+// ─── KPI 核心指标卡 ───────────────────────────────
+function renderKpiGrid() {
+  const d = D;
+  const avgPlay = d.total_videos ? Math.round(d.total_play / d.total_videos) : 0;
+  const engRate = d.total_play ? (d.total_interact / d.total_play * 100) : 0;
+
+  // ── F2: 计算同比环比 ──────────────────────────
+  function calcGrowth(current, prev) {
+    if (!prev || prev === 0) return null;
+    return ((current - prev) / prev * 100).toFixed(1);
+  }
+  function sumTrend(arr) {
+    return (arr || []).map((_, i) =>
+      (d.trend_douyin[i]||0) + (d.trend_ks[i]||0) + (d.trend_bili[i]||0) + (d.trend_wx[i]||0)
+    );
+  }
+  const trendPlay  = sumTrend(d.trend_labels);
+  const trendInter = d.trend_interact || [];
+  const n = trendPlay.length;
+
+  const growthPlay  = calcGrowth(trendPlay[n-1],  trendPlay[n-2]);
+  const growthInter= calcGrowth(trendInter[n-1], trendInter[n-2]);
+  const growthFan  = calcGrowth(d.total_fan || 0, (d.total_fan || 0) * 0.95); // 估算
+
+  // ── F1: 迷你趋势线数据（最近 8 期）────────────
+  function sparkData(arr) { return (arr || []).slice(-8); }
+  const sparkPlay  = sparkData(trendPlay);
+  const sparkInter = sparkData(trendInter);
+  const sparkFan   = [0,0,0,0,0,0,0, d.total_fan||0]; // 总量只能画最后一点，用互动趋势代理
+  const sparkEng   = sparkData(trendPlay.map((v,i) =>
+    d.total_play ? (trendInter[i]||0) / v * 100 : 0
+  ));
+
+  const cards = [
+    {
+      label: '累计总播放量', icon: '▶',
+      color: 'linear-gradient(90deg,#6c63ff,#3ecfcf)',
+      target: d.total_play, suffix: '', decimals: 0,
+      sub: `四平台合计 · ${d.total_videos} 条视频`,
+      growth: growthPlay, sparkData: sparkPlay, sparkColor: '#6c63ff',
+    },
+    {
+      label: '累计总互动量', icon: '💬',
+      color: 'linear-gradient(90deg,#f5a623,#ff6b35)',
+      target: d.total_interact, suffix: '', decimals: 0,
+      sub: `点赞 + 评论 + 分享 + 收藏`,
+      growth: growthInter, sparkData: sparkInter, sparkColor: '#f5a623',
+    },
+    {
+      label: '累计评论量', icon: '📝',
+      color: 'linear-gradient(90deg,#3ecfcf,#22d3a3)',
+      target: d.total_comment || 0, suffix: '', decimals: 0,
+      sub: `四平台评论总数`,
+      growth: null, sparkData: sparkInter, sparkColor: '#3ecfcf', // 用互动代理
+    },
+    {
+      label: '综合互动率', icon: '🎯',
+      color: 'linear-gradient(90deg,#c084fc,#e879f9)',
+      target: engRate, suffix: '%', decimals: 2,
+      sub: `互动量 ÷ 播放量 × 100%`,
+      growth: null, sparkData: sparkEng, sparkColor: '#c084fc',
+    },
+    {
+      label: '单条均播放', icon: '📊',
+      color: 'linear-gradient(90deg,#22d3a3,#0ea5e9)',
+      target: avgPlay, suffix: '', decimals: 0,
+      sub: `总播放 ÷ 去重视频数`,
+      growth: null, sparkData: sparkPlay, sparkColor: '#22d3a3',
+    },
+    {
+      label: '累计涨粉量', icon: '⬆',
+      color: 'linear-gradient(90deg,#f5a623,#eab308)',
+      target: d.total_fan || 0, suffix: '', decimals: 0,
+      sub: `四平台粉丝净增总量`,
+      growth: null, sparkData: sparkInter, sparkColor: '#f5a623',
+    }
+  ];
+
+  const html = cards.map((c, i) => `
+    <div class="kpi-card" style="--kpi-color:${c.color}">
+      ${c.growth !== null ? `<div class="kpi-growth ${parseFloat(c.growth)>=0?'up':'dn'}">${parseFloat(c.growth)>=0?'↑':'↓'}${Math.abs(c.growth)}%</div>` : ''}
+      <div class="kpi-label"><span class="kpi-icon">${c.icon}</span>${c.label}</div>
+      <div class="kpi-value" data-target="${c.target}" data-suffix="${c.suffix}" data-decimals="${c.decimals}">0</div>
+      <div class="kpi-sub">${c.sub}</div>
+      <canvas class="kpi-sparkline" id="spark-${i}" width="100" height="30" data-spark='${JSON.stringify(c.sparkData)}' data-color="${c.sparkColor}"></canvas>
+    </div>
+  `).join('');
+  document.getElementById('kpiGrid').innerHTML = html;
+
+  // 数字滚动动画（延迟启动，匹配入场动画）
+  setTimeout(() => {
+    document.querySelectorAll('#kpiGrid .kpi-value').forEach(el => {
+      const target = parseFloat(el.dataset.target);
+      const suffix = el.dataset.suffix || '';
+      const decimals = parseInt(el.dataset.decimals || '0');
+      if (decimals > 0) {
+        counterUpFloat(el, target, 1800, decimals, suffix);
+      } else {
+        counterUp(el, target, 1800, suffix);
+      }
+    });
+    // F1: 渲染迷你趋势线
+    document.querySelectorAll('.kpi-sparkline').forEach(canvas => {
+      const raw = canvas.dataset.spark;
+      if (!raw || raw === 'null') return;
+      try {
+        const data = JSON.parse(raw).map(Number).filter(v => !isNaN(v) && v > 0);
+        if (data.length < 2) return;
+        drawSparkline(canvas, data, canvas.dataset.color);
+      } catch(e) {}
+    });
+  }, 100);
+}
+
+// ─── F1: Canvas 迷你趋势线 ──────────────────────────
+function drawSparkline(canvas, data, color) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  ctx.clearRect(0, 0, w, h);
+  // 渐变填充
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, color.replace(')', ', 0.25)').replace('rgb', 'rgba'));
+  grad.addColorStop(1, color.replace(')', ', 0.02)').replace('rgb', 'rgba'));
+  // 底线
+  ctx.beginPath();
+  data.forEach((v, i) => {
+    const x = (i / (data.length - 1)) * w;
+    const y = h - ((v - min) / range) * (h - 4) - 2;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // 渐变填充
+  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+  // 尾端点
+  const lastX = w, lastY = h - ((data[data.length-1] - min) / range) * (h-4) - 2;
+  ctx.beginPath(); ctx.arc(lastX, lastY, 2.5, 0, Math.PI*2);
+  ctx.fillStyle = color; ctx.fill();
+}
+
+
+// ─── 平台详细卡片 ─────────────────────────────────
+function renderPlatGrid() {
+  const d = D;
+  const platDef = [
+    { key:'douyin', name:'抖音', color:'var(--tt)', tag:'抖音 TikTok', tagCls:'plat-tag-tt', barCls:'prog-fill-tt' },
+    { key:'wx',     name:'视频号', color:'var(--wx)', tag:'微信视频号',   tagCls:'plat-tag-wx', barCls:'prog-fill-wx' },
+    { key:'bili',   name:'B站',   color:'var(--bili)', tag:'哔哩哔哩',   tagCls:'plat-tag-bili', barCls:'prog-fill-bili' },
+    { key:'ks',     name:'快手',   color:'var(--ks)', tag:'快手',       tagCls:'plat-tag-ks', barCls:'prog-fill-ks' },
+  ];
+  const maxPlay = Math.max(...platDef.map(p => d.plat_play[p.key] || 0));
+  document.getElementById('platGrid').innerHTML = platDef.map((p, idx) => {
+    const play = d.plat_play[p.key] || 0;
+    const like = d.plat_like[p.key] || 0;
+    const barPct = maxPlay ? Math.round(play / maxPlay * 100) : 0;
+    return `
+    <div class="plat-card" style="animation-delay:${0.1 + idx*0.08}s">
+      <div class="plat-card-head">
+        <div class="plat-dot" style="background:${p.color}"></div>
+        <span class="plat-name">${p.name}</span>
+        <span class="plat-tag ${p.tagCls}">${p.tag}</span>
+      </div>
+      <div class="plat-nums">
+        <div class="plat-num-item">
+          <div class="plat-num-label">播放量</div>
+          <div class="plat-num-value" style="color:${p.color}" data-target="${play}" data-suffix="" data-decimals="0">0</div>
+        </div>
+        <div class="plat-num-item">
+          <div class="plat-num-label">点赞量</div>
+          <div class="plat-num-value">${fmt(like)}</div>
+        </div>
+        <div class="plat-num-item">
+          <div class="plat-num-label">占总播放</div>
+          <div class="plat-num-value" style="font-size:15px">${pct(play, d.total_play)}</div>
+        </div>
+        <div class="plat-num-item">
+          <div class="plat-num-label">点赞率</div>
+          <div class="plat-num-value" style="font-size:15px">${pct(like, play)}</div>
+        </div>
+      </div>
+      <div class="plat-bar-wrap">
+        <div class="plat-bar ${p.barCls}" style="width:${barPct}%"></div>
+      </div>
+    </div>`;
+  }).join('');
+  // 平台卡片数字滚动
+  setTimeout(() => {
+    document.querySelectorAll('#platGrid .plat-num-value[data-target]').forEach(el => {
+      counterUp(el, parseFloat(el.dataset.target), 1500);
+    });
+  }, 200);
+}
+
+// ─── 趋势辅助 ─────────────────────────────────────
+function getTrendSlice(n) {
+  const labels = D.trend_labels || [];
+  const sn = Math.min(n, labels.length);
+  return {
+    labels: labels.slice(-sn),
+    dy:     D.trend_douyin.slice(-sn),
+    ks:     D.trend_ks.slice(-sn),
+    bili:   D.trend_bili.slice(-sn),
+    wx:     D.trend_wx.slice(-sn),
+    inter:  D.trend_interact.slice(-sn),
+    count:  D.trend_count.slice(-sn),
+  };
+}
+
+// ─── 总览：趋势折线 ───────────────────────────────
+function rebuildTrend0() {
+  if (!D) return;
+  const s = getTrendSlice(trendRange0);
+  destroyChart('overviewTrend');
+  charts['overviewTrend'] = new Chart(document.getElementById('overviewTrendChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: s.labels,
+      datasets: [
+        { label:'抖音', data:s.dy,   borderColor:'#fe2c55', backgroundColor:'rgba(254,44,85,0.08)',  tension:.4, pointRadius:2, fill:false },
+        { label:'视频号', data:s.wx, borderColor:'#07c160', backgroundColor:'rgba(7,193,96,0.08)',   tension:.4, pointRadius:2, fill:false },
+        { label:'快手', data:s.ks,   borderColor:'#ff6b35', backgroundColor:'rgba(255,107,53,0.08)', tension:.4, pointRadius:2, fill:false },
+        { label:'B站',  data:s.bili, borderColor:'#00b5e2', backgroundColor:'rgba(0,181,226,0.08)',  tension:.4, pointRadius:2, fill:false },
+      ]
+    },
+    options: {
+      ...baseOpts(),
+      plugins: {
+        ...baseOpts().plugins,
+        tooltip: {
+          ...baseOpts().plugins.tooltip,
+          mode: 'index', intersect: false,
+          callbacks: { label: c => ` ${c.dataset.label}: ${fmt(c.raw)}` }
+        }
+      }
+    }
+  });
+}
+
+// ─── 总览：播放占比饼图 ───────────────────────────
+function renderPieChart() {
+  destroyChart('pie');
+  const d = D;
+  const vals = [d.plat_play.douyin, d.plat_play.wx, d.plat_play.ks, d.plat_play.bili];
+  const total = vals.reduce((a,b)=>a+b,0);
+  document.getElementById('pieCenterVal').textContent = fmt(total);
+  const colors = ['#fe2c55','#07c160','#ff6b35','#00b5e2'];
+  const names = ['抖音','视频号','快手','B站'];
+  charts['pie'] = new Chart(document.getElementById('pieChart').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: names,
+      datasets: [{ data: vals, backgroundColor: colors, borderWidth: 0, hoverOffset: 6 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '68%',
+      animation: { duration: 800 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1c2540', borderColor: 'rgba(255,255,255,.1)', borderWidth: 1,
+          titleColor: '#e2e8f8', bodyColor: '#a0aec8', padding: 10, cornerRadius: 8,
+          callbacks: { label: c => ` ${c.label}: ${fmt(c.raw)} (${(c.raw/total*100).toFixed(1)}%)` }
+        }
+      }
+    }
+  });
+  document.getElementById('pieLeg').innerHTML = names.map((n,i)=>
+    `<span class="leg"><span class="leg-dot" style="background:${colors[i]}"></span>${n} ${(vals[i]/total*100).toFixed(0)}%</span>`
+  ).join('');
+}
+
+// ─── 总览：互动趋势 ───────────────────────────────
+function renderInteractChart() {
+  destroyChart('interact');
+  const s = getTrendSlice(6);
+  charts['interact'] = new Chart(document.getElementById('interactChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: s.labels,
+      datasets: [{
+        data: s.inter,
+        borderColor: '#6c63ff',
+        backgroundColor: 'rgba(108,99,255,0.12)',
+        tension: .4, pointRadius: 2, fill: true
+      }]
+    },
+    options: baseOpts()
+  });
+}
+
+// ─── 总览：发布数 ─────────────────────────────────
+function renderCountChart() {
+  destroyChart('count');
+  const s = getTrendSlice(6);
+  charts['count'] = new Chart(document.getElementById('countChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: s.labels,
+      datasets: [{
+        data: s.count,
+        backgroundColor: 'rgba(245,166,35,0.65)',
+        borderRadius: 5
+      }]
+    },
+    options: baseOpts()
+  });
+}
+
+// ─── 总览：互动构成饼 ─────────────────────────────
+function renderInteractPie() {
+  destroyChart('interactPie');
+  const d = D;
+  const totalLike = (d.plat_like.douyin||0)+(d.plat_like.ks||0)+(d.plat_like.bili||0)+(d.plat_like.wx||0);
+  const vals = [totalLike, d.total_comment||0, d.total_share||0];
+  const total = vals.reduce((a,b)=>a+b,0);
+  charts['interactPie'] = new Chart(document.getElementById('interactPieChart').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: ['点赞','评论','分享'],
+      datasets: [{ data: vals, backgroundColor: ['#6c63ff','#3ecfcf','#ff6eb4'], borderWidth: 0, hoverOffset: 5 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '60%',
+      animation: { duration: 800 },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'right',
+          labels: { color: '#a0aec8', font: { size: 11 }, padding: 12, usePointStyle: true }
+        },
+        tooltip: {
+          backgroundColor: '#1c2540', borderColor: 'rgba(255,255,255,.1)', borderWidth: 1,
+          titleColor: '#e2e8f8', bodyColor: '#a0aec8', padding: 10, cornerRadius: 8,
+          callbacks: { label: c => ` ${c.label}: ${fmt(c.raw)} (${total?(c.raw/total*100).toFixed(1):0}%)` }
+        }
+      }
+    }
+  });
+}
+
+// F3: 热力图 ───────────────────────────────────────
+let heatRange = 6;
+
+function setHeatRange(n, btn) {
+  document.querySelectorAll('#heatRangeBtns .fbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  heatRange = n;
+  renderHeatmap();
+}
+
+function renderHeatmap() {
+  if (!D) return;
+  const d = D;
+  const labels = d.trend_labels || [];
+  const range = heatRange === 99 ? labels.length : Math.min(heatRange, labels.length);
+  const sliced = labels.slice(-range);
+
+  const plats = [
+    { key: 'douyin', name: '抖音', color: '#fe2c55' },
+    { key: 'wx',     name: '视频号', color: '#07c160' },
+    { key: 'ks',     name: '快手', color: '#ff6b35' },
+    { key: 'bili',   name: 'B站',   color: '#00b5e2' },
+  ];
+
+  // 计算全局 min/max 用于颜色映射
+  let allVals = [];
+  sliced.forEach((_, mi) => {
+    plats.forEach(p => {
+      const idx = labels.length - range + mi;
+      const v = (d['trend_' + p.key] || [])[idx] || 0;
+      allVals.push(v);
+    });
+  });
+  const minV = Math.min(...allVals);
+  const maxV = Math.max(...allVals);
+  const rangeV = maxV - minV || 1;
+
+  function colorFor(v) {
+    const t = Math.max(0, Math.min(1, (v - minV) / rangeV));
+    const alpha = 0.08 + t * 0.92;
+    return `rgba(6, 182, 212, ${alpha.toFixed(2)})`;
+  }
+
+  const grid = document.getElementById('heatmapGrid');
+  let html = `
+    <div class="heat-header">
+      <div class="heat-header-label" style="opacity:0">月</div>
+      ${plats.map(p => `<div class="heat-header-label" style="color:${p.color}">${p.name}</div>`).join('')}
+    </div>`;
+
+  sliced.forEach((month, mi) => {
+    const idx = labels.length - range + mi;
+    html += `<div class="heat-row">
+      <div class="heat-label">${month}</div>
+      <div class="heat-cells">`;
+    plats.forEach((p, pi) => {
+      const v = (d['trend_' + p.key] || [])[idx] || 0;
+      const bg = colorFor(v);
+      const light = v > minV + rangeV * 0.65;
+      // 波浪式入场延迟：按列+行偏移
+      const delay = (mi * 4 + pi) * 0.018 + 0.1;
+      html += `<div class="heat-cell" style="background:${bg};color:${light?'rgba(255,255,255,0.9)':'rgba(255,255,255,0.5)'};animation-delay:${delay.toFixed(3)}s"
+        title="${p.name} ${month}：${fmt(v)}次播放"
+        onclick="showHeatDetail('${p.name}','${month}',${v})">${fmt(v)}</div>`;
+    });
+    html += `</div></div>`;
+  });
+
+  grid.innerHTML = html;
+}
+
+function showHeatDetail(plat, month, play) {
+  showToast(`📊 ${plat} · ${month} 播放量：${fmt(play)} 次`);
+}
+
+// ─── 趋势页 ───────────────────────────────────────
+function renderTrendSection() {
+  rebuildTrend1();
+  renderAvgPlay();
+  renderEngRate();
+  renderTtWx();
+  renderBiliKs();
+}
+
+function rebuildTrend1() {
+  if (!D) return;
+  const s = getTrendSlice(trendRange1);
+  destroyChart('trendMain');
+  charts['trendMain'] = new Chart(document.getElementById('trendMainChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: s.labels,
+      datasets: [
+        { label:'抖音',  data:s.dy,   backgroundColor:'rgba(254,44,85,0.7)',   borderRadius:4, stack:'play' },
+        { label:'视频号',data:s.wx,   backgroundColor:'rgba(7,193,96,0.7)',    borderRadius:4, stack:'play' },
+        { label:'快手',  data:s.ks,   backgroundColor:'rgba(255,107,53,0.7)',  borderRadius:4, stack:'play' },
+        { label:'B站',   data:s.bili, backgroundColor:'rgba(0,181,226,0.7)',   borderRadius:4, stack:'play' },
+      ]
+    },
+    options: {
+      ...baseOpts({ scales: { x: { stacked: true, grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#5a6888',font:{size:10}} }, y: { stacked: true, grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#5a6888',font:{size:10}} } } }),
+      plugins: {
+        ...baseOpts().plugins,
+        legend: { display: true, labels: { color: '#a0aec8', font: { size: 11 }, usePointStyle: true } },
+        tooltip: { ...baseOpts().plugins.tooltip, mode: 'index', intersect: false }
+      }
+    }
+  });
+}
+
+function renderAvgPlay() {
+  destroyChart('avgPlay');
+  const s = getTrendSlice(trendRange1);
+  const avg = s.labels.map((_,i) => {
+    const total = (s.dy[i]||0)+(s.ks[i]||0)+(s.bili[i]||0)+(s.wx[i]||0);
+    return s.count[i] ? Math.round(total / s.count[i]) : 0;
+  });
+  charts['avgPlay'] = new Chart(document.getElementById('avgPlayChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: s.labels,
+      datasets: [{ data: avg, borderColor: '#3ecfcf', backgroundColor: 'rgba(62,207,207,0.1)', tension: .4, pointRadius: 3, fill: true }]
+    },
+    options: {
+      ...baseOpts(),
+      plugins: { ...baseOpts().plugins, tooltip: { ...baseOpts().plugins.tooltip, callbacks: { label: c => ` 均播: ${fmt(c.raw)}` } } }
+    }
+  });
+}
+
+function renderEngRate() {
+  destroyChart('engRate');
+  const s = getTrendSlice(trendRange1);
+  const rate = s.labels.map((_,i) => {
+    const total = (s.dy[i]||0)+(s.ks[i]||0)+(s.bili[i]||0)+(s.wx[i]||0);
+    return total ? parseFloat((s.inter[i] / total * 100).toFixed(2)) : 0;
+  });
+  charts['engRate'] = new Chart(document.getElementById('engRateChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: s.labels,
+      datasets: [{ data: rate, borderColor: '#c084fc', backgroundColor: 'rgba(192,132,252,0.1)', tension: .4, pointRadius: 3, fill: true }]
+    },
+    options: {
+      ...baseOpts(),
+      plugins: { ...baseOpts().plugins, tooltip: { ...baseOpts().plugins.tooltip, callbacks: { label: c => ` 互动率: ${c.raw}%` } } }
+    }
+  });
+}
+
+function renderTtWx() {
+  destroyChart('ttWx');
+  const s = getTrendSlice(trendRange1);
+  charts['ttWx'] = new Chart(document.getElementById('ttWxChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: s.labels,
+      datasets: [
+        { label:'抖音', data:s.dy, borderColor:'#fe2c55', tension:.4, pointRadius:2, fill:false },
+        { label:'视频号', data:s.wx, borderColor:'#07c160', tension:.4, pointRadius:2, fill:false }
+      ]
+    },
+    options: { ...baseOpts(), plugins: { ...baseOpts().plugins, tooltip: { ...baseOpts().plugins.tooltip, mode:'index', intersect:false } } }
+  });
+}
+
+function renderBiliKs() {
+  destroyChart('biliKs');
+  const s = getTrendSlice(trendRange1);
+  charts['biliKs'] = new Chart(document.getElementById('biliKsChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: s.labels,
+      datasets: [
+        { label:'B站', data:s.bili, borderColor:'#00b5e2', tension:.4, pointRadius:2, fill:false },
+        { label:'快手', data:s.ks,  borderColor:'#ff6b35', tension:.4, pointRadius:2, fill:false }
+      ]
+    },
+    options: { ...baseOpts(), plugins: { ...baseOpts().plugins, tooltip: { ...baseOpts().plugins.tooltip, mode:'index', intersect:false } } }
+  });
+}
+
+// ─── 平台对比页 ───────────────────────────────────
+function renderCompareSection() {
+  renderCmpStatCards();
+  renderCmpCharts();
+  renderContribBars();
+}
+
+function renderCmpStatCards() {
+  const d = D;
+  const platDef = [
+    { key:'douyin', name:'抖音',  color:'var(--tt)',   tagCls:'plat-tag-tt' },
+    { key:'ks',     name:'快手',  color:'var(--ks)',   tagCls:'plat-tag-ks' },
+    { key:'bili',   name:'B站',   color:'var(--bili)', tagCls:'plat-tag-bili' },
+    { key:'wx',     name:'视频号',color:'var(--wx)',   tagCls:'plat-tag-wx' },
+  ];
+  document.getElementById('cmpStatCards').innerHTML = platDef.map(p => {
+    const play = d.plat_play[p.key] || 0;
+    const like = d.plat_like[p.key] || 0;
+    return `<div class="cmp-stat">
+      <div class="cmp-stat-head"><span class="plat-dot" style="background:${p.color};width:8px;height:8px;border-radius:50%;flex-shrink:0"></span>${p.name}</div>
+      <div class="cmp-stat-row"><span class="label">总播放</span><span class="val" style="color:${p.color}">${fmt(play)}</span></div>
+      <div class="cmp-stat-row"><span class="label">总点赞</span><span class="val">${fmt(like)}</span></div>
+      <div class="cmp-stat-row"><span class="label">播放占比</span><span class="val">${pct(play, d.total_play)}</span></div>
+      <div class="cmp-stat-row"><span class="label">点赞率</span><span class="val">${pct(like, play)}</span></div>
+    </div>`;
+  }).join('');
+}
+
+function renderCmpCharts() {
+  const d = D;
+  const labels = ['抖音','快手','B站','视频号'];
+  const colors = ['rgba(254,44,85,.75)','rgba(255,107,53,.75)','rgba(0,181,226,.75)','rgba(7,193,96,.75)'];
+  const playVals = [d.plat_play.douyin, d.plat_play.ks, d.plat_play.bili, d.plat_play.wx];
+  const likeVals = [d.plat_like.douyin, d.plat_like.ks, d.plat_like.bili, d.plat_like.wx];
+
+  destroyChart('cmpPlay');
+  charts['cmpPlay'] = new Chart(document.getElementById('cmpPlayChart').getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: playVals, backgroundColor: colors, borderRadius: 6 }] },
+    options: {
+      ...baseOpts({ indexAxis: 'y' }),
+      plugins: { ...baseOpts().plugins, tooltip: { ...baseOpts().plugins.tooltip, callbacks: { label: c => ` ${fmt(c.raw)}` } } }
+    }
+  });
+
+  destroyChart('cmpLike');
+  charts['cmpLike'] = new Chart(document.getElementById('cmpLikeChart').getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: likeVals, backgroundColor: colors, borderRadius: 6 }] },
+    options: {
+      ...baseOpts({ indexAxis: 'y' }),
+      plugins: { ...baseOpts().plugins, tooltip: { ...baseOpts().plugins.tooltip, callbacks: { label: c => ` ${fmt(c.raw)}` } } }
+    }
+  });
+
+  // 雷达
+  destroyChart('radar');
+  const maxPlay = Math.max(...playVals) || 1;
+  const maxLike = Math.max(...likeVals) || 1;
+  const r = (v, mx) => Math.round(v / mx * 100);
+  // 互动率分数（相对）
+  const engScores = playVals.map((pv, i) => pv ? Math.round(likeVals[i] / pv * 10000) : 0);
+  const maxEng = Math.max(...engScores) || 1;
+  charts['radar'] = new Chart(document.getElementById('radarChart').getContext('2d'), {
+    type: 'radar',
+    data: {
+      labels: ['播放量','点赞量','点赞率','播放占比','综合'],
+      datasets: [
+        { label:'抖音',  data:[r(playVals[0],maxPlay), r(likeVals[0],maxLike), r(engScores[0],maxEng), r(playVals[0],maxPlay), Math.round((r(playVals[0],maxPlay)+r(likeVals[0],maxLike))/2)], borderColor:'#fe2c55', backgroundColor:'rgba(254,44,85,0.1)', pointRadius:3 },
+        { label:'快手',  data:[r(playVals[1],maxPlay), r(likeVals[1],maxLike), r(engScores[1],maxEng), r(playVals[1],maxPlay), Math.round((r(playVals[1],maxPlay)+r(likeVals[1],maxLike))/2)], borderColor:'#ff6b35', backgroundColor:'rgba(255,107,53,0.1)', pointRadius:3 },
+        { label:'B站',   data:[r(playVals[2],maxPlay), r(likeVals[2],maxLike), r(engScores[2],maxEng), r(playVals[2],maxPlay), Math.round((r(playVals[2],maxPlay)+r(likeVals[2],maxLike))/2)], borderColor:'#00b5e2', backgroundColor:'rgba(0,181,226,0.1)', pointRadius:3 },
+        { label:'视频号',data:[r(playVals[3],maxPlay), r(likeVals[3],maxLike), r(engScores[3],maxEng), r(playVals[3],maxPlay), Math.round((r(playVals[3],maxPlay)+r(likeVals[3],maxLike))/2)], borderColor:'#07c160', backgroundColor:'rgba(7,193,96,0.1)', pointRadius:3 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 700 },
+      plugins: {
+        legend: { display: true, labels: { color: '#a0aec8', font: { size: 11 }, usePointStyle: true, padding: 12 } },
+        tooltip: { backgroundColor:'#1c2540', borderColor:'rgba(255,255,255,.1)', borderWidth:1, titleColor:'#e2e8f8', bodyColor:'#a0aec8', padding:10, cornerRadius:8 }
+      },
+      scales: {
+        r: {
+          grid: { color: 'rgba(255,255,255,0.07)' },
+          ticks: { color: '#5a6888', backdropColor: 'transparent', font: { size: 10 }, stepSize: 20 },
+          angleLines: { color: 'rgba(255,255,255,0.07)' },
+          pointLabels: { color: '#a0aec8', font: { size: 11 } }
+        }
+      }
+    }
+  });
+
+  // 评论分享
+  destroyChart('cmpCs');
+  const commentVals = [d.total_comment*0.72, d.total_comment*0.07, d.total_comment*0.07, d.total_comment*0.14].map(Math.round);
+  const shareVals   = [d.total_share*0.73,   d.total_share*0.07,   d.total_share*0.04,   d.total_share*0.16].map(Math.round);
+  charts['cmpCs'] = new Chart(document.getElementById('cmpCsChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label:'评论', data:commentVals, backgroundColor:'rgba(62,207,207,0.7)', borderRadius:4 },
+        { label:'分享', data:shareVals,   backgroundColor:'rgba(255,110,180,0.7)', borderRadius:4 }
+      ]
+    },
+    options: {
+      ...baseOpts(),
+      plugins: { ...baseOpts().plugins, legend: { display:true, labels:{ color:'#a0aec8', font:{size:11}, usePointStyle:true } } }
+    }
+  });
+}
+
+function renderContribBars() {
+  const d = D;
+  const playTot = d.total_play || 1;
+  const likeTot = (d.plat_like.douyin||0)+(d.plat_like.ks||0)+(d.plat_like.bili||0)+(d.plat_like.wx||0) || 1;
+  const metrics = [
+    { label:'抖音 播放贡献', val:d.plat_play.douyin, max:playTot, color:'var(--tt)' },
+    { label:'视频号 播放贡献', val:d.plat_play.wx, max:playTot, color:'var(--wx)' },
+    { label:'快手 播放贡献', val:d.plat_play.ks, max:playTot, color:'var(--ks)' },
+    { label:'B站 播放贡献', val:d.plat_play.bili, max:playTot, color:'var(--bili)' },
+    { label:'抖音 点赞贡献', val:d.plat_like.douyin, max:likeTot, color:'var(--tt)' },
+    { label:'视频号 点赞贡献', val:d.plat_like.wx, max:likeTot, color:'var(--wx)' },
+    { label:'快手 点赞贡献', val:d.plat_like.ks, max:likeTot, color:'var(--ks)' },
+    { label:'B站 点赞贡献', val:d.plat_like.bili, max:likeTot, color:'var(--bili)' },
+  ];
+  document.getElementById('contribBars').innerHTML = metrics.map(m => {
+    const p = Math.round(m.val / m.max * 100);
+    return `<div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:5px">
+        <span>${m.label}</span><span style="color:${m.color};font-weight:500">${pct(m.val, m.max)}</span>
+      </div>
+      <div class="prog-bar" style="height:6px;border-radius:6px">
+        <div class="prog-fill" style="width:${p}%;background:${m.color}"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── 排行页 ───────────────────────────────────────
+function renderContentSection() {
+  renderContentKpi();
+  renderContentTable();
+}
+
+function renderContentKpi() {
+  const d = D;
+  const top20 = d.top20 || [];
+  if (!top20.length) return;
+  const topPlay = top20[0].total_play || 0;
+  const topInter = [...top20].sort((a,b)=>b.total_interact-a.total_interact)[0]?.total_interact || 0;
+  const avgTop = Math.round(top20.reduce((s,v)=>s+v.total_play,0)/top20.length);
+  const cards = [
+    { label:'Top1 播放量', icon:'🥇', color:'linear-gradient(90deg,#f5a623,#ff6b35)', value:fmt(topPlay), sub:'单条最高播放' },
+    { label:'Top1 互动量', icon:'❤️', color:'linear-gradient(90deg,#fe2c55,#c084fc)', value:fmt(topInter), sub:'单条最高互动' },
+    { label:'Top20 均播', icon:'📐', color:'linear-gradient(90deg,#6c63ff,#3ecfcf)', value:fmt(avgTop), sub:'前20条均值' },
+    { label:'入榜门槛', icon:'🚪', color:'linear-gradient(90deg,#22d3a3,#0ea5e9)', value:fmt(top20[top20.length-1]?.total_play||0), sub:'第20名播放量' },
+  ];
+  document.getElementById('contentKpiGrid').innerHTML = cards.map(c => `
+    <div class="kpi-card" style="--kpi-color:${c.color}">
+      <div class="kpi-label"><span class="kpi-icon">${c.icon}</span>${c.label}</div>
+      <div class="kpi-value">${c.value}</div>
+      <div class="kpi-sub">${c.sub}</div>
+    </div>
+  `).join('');
+}
+
+function sortContent(by, btn) {
+  currentSort = by;
+  document.querySelectorAll('#sec-content .fbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderContentTable();
+}
+
+function renderContentTable() {
+  const list = (D.top20 || []).slice().sort((a,b) => {
+    if (currentSort === 'play')    return b.total_play - a.total_play;
+    if (currentSort === 'interact') return b.total_interact - a.total_interact;
+    if (currentSort === 'comment') return b.total_comment - a.total_comment;
+    return b.total_play - a.total_play;
+  });
+  const maxPlay = list[0]?.total_play || 1;
+  const rankClass = (i) => i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'rank-n';
+  document.getElementById('contentTbody').innerHTML = list.map((v,i) => `
+    <tr>
+      <td><span class="rank-num ${rankClass(i)}">${i+1}</span></td>
+      <td><div class="v-title" title="${v.title}">${v.title}</div></td>
+      <td style="color:var(--muted);font-size:11px;white-space:nowrap">${fmtDate(v.date_ts)}</td>
+      <td style="color:var(--tt)">${fmt(v.douyin_play)}</td>
+      <td style="color:var(--ks)">${fmt(v.ks_play)}</td>
+      <td style="color:var(--bili)">${fmt(v.bili_play)}</td>
+      <td style="color:var(--wx)">${fmt(v.wx_play)}</td>
+      <td class="num-play">${fmt(v.total_play)}</td>
+      <td class="num-inter">${fmt(v.total_interact)}</td>
+      <td style="color:var(--accent2)">${fmt(v.total_comment)}</td>
+      <td style="color:var(--pink)">${fmt(v.total_share)}</td>
+      <td><span class="author-tag">${v.author||'-'}</span></td>
+    </tr>
+  `).join('');
+}
+
+// ─── 初始化 ───────────────────────────────────────
+// 带自动重试的初始化函数
+async function initWithRetry(retryCount = 0, maxRetry = 8, retryInterval = 2000) {
+  const mask = document.getElementById('loadingMask');
+  if (mask) mask.style.display = 'flex';
+
+  // 显示重连状态
+  function showRetryStatus(n, max) {
+    if (!mask) return;
+    mask.innerHTML = `
+      <div style="text-align:center;padding:36px;max-width:420px">
+        <div style="font-size:40px;margin-bottom:16px;animation:spin 1s linear infinite;display:inline-block">⚙️</div>
+        <div style="font-size:15px;font-weight:600;color:#60a5fa;margin-bottom:10px">正在连接后端服务...</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:6px">服务启动中，请稍候（${n}/${max}）</div>
+        <div style="width:200px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin:12px auto;">
+          <div style="width:${Math.round(n/max*100)}%;height:100%;background:linear-gradient(90deg,#6c63ff,#3ecfcf);border-radius:2px;transition:width 0.5s"></div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px">${retryInterval/1000} 秒后自动重试...</div>
+      </div>`;
+  }
+
+  // 显示最终失败状态
+  function showFailStatus(errMsg) {
+    if (!mask) return;
+    mask.innerHTML = `
+      <div style="text-align:center;padding:36px;max-width:440px">
+        <div style="font-size:40px;margin-bottom:16px">⚠️</div>
+        <div style="font-size:16px;font-weight:600;color:#f87171;margin-bottom:12px">无法连接到本地服务</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.9;margin-bottom:16px;background:rgba(255,255,255,0.04);padding:14px;border-radius:10px;text-align:left">
+          <b>方法①（推荐）：</b>已设置开机自启动，<br>
+          &emsp;下次重启电脑后会自动启动。<br><br>
+          <b>方法②（立即使用）：</b><br>
+          &emsp;双击运行 <code style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;color:#a5b4fc">后台启动服务.vbs</code><br>
+          &emsp;或 <code style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;color:#a5b4fc">启动看板服务.bat</code>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:14px">错误：${errMsg}</div>
+        <button onclick="location.reload()" style="padding:10px 28px;background:linear-gradient(135deg,#6c63ff,#3ecfcf);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🔄 重新连接</button>
+      </div>`;
+  }
+
+  for (let attempt = 0; attempt <= maxRetry; attempt++) {
+    try {
+      // 先检测服务是否可达（快速探测）
+      const probeResp = await fetch(API_BASE + '/api/dashboard', { signal: AbortSignal.timeout(4000) });
+      if (!probeResp.ok) throw new Error('HTTP ' + probeResp.status);
+
+      // 服务可达，正式加载数据
+      if (mask) mask.innerHTML = `<div style="text-align:center;padding:30px"><div style="font-size:36px;margin-bottom:12px">🚀</div><div style="font-size:14px;color:var(--text2)">正在加载数据...</div></div>`;
+
+      const [dashData, taskResult] = await Promise.all([
+        probeResp.json(),
+        fetchTaskData(false).catch(() => null)
+      ]);
+
+      D = dashData;
+      if (dashData.error) throw new Error(dashData.error);
+      renderAll();
+
+      // 任务数据初始化
+      if (taskResult) {
+        updateTaskStats();
+        TASK_STATS._updated_at = taskResult.updated_at;
+        const timeEl = document.getElementById('taskUpdatedTime');
+        const badge = document.getElementById('taskLiveBadge');
+        if (timeEl) timeEl.textContent = '更新：' + (taskResult.updated_at || '—');
+        if (badge) badge.classList.remove('loading');
+      } else {
+        const badge = document.getElementById('taskLiveBadge');
+        const subEl = document.getElementById('taskLiveSub');
+        if (badge) { badge.classList.remove('loading'); badge.classList.add('error'); badge.querySelector('span:last-child').textContent = '离线模式'; }
+        if (subEl) subEl.textContent = '后端未启动或服务异常';
+      }
+
+      // 成功：隐藏遮罩
+      if (mask) mask.style.display = 'none';
+      hideLoading();
+      startRefreshTimer();
+      updateHealthStatus();
+      return; // 成功退出
+
+    } catch(e) {
+      console.warn(`init attempt ${attempt+1}/${maxRetry+1} failed:`, e.message);
+      if (attempt < maxRetry) {
+        showRetryStatus(attempt + 1, maxRetry);
+        await new Promise(r => setTimeout(r, retryInterval));
+      } else {
+        showFailStatus(e.message);
+        hideLoading();
+      }
+    }
+  }
+}
+
+(async function init() {
+  await initWithRetry(0, 8, 2000);
+})();
+
+// ═══════════════════════════════════════════════════
+// 平台深度模块
+// ═══════════════════════════════════════════════════
+// PD 已在上方声明
+PD = null;               // platform data
+let depthPlat = 'douyin'; // 当前选中平台
+
+const PLAT_CFG = {
+  douyin: { name:'抖音',  color:'#fe2c55', colorAlpha:'rgba(254,44,85,0.1)' },
+  ks:     { name:'快手',  color:'#ff6b35', colorAlpha:'rgba(255,107,53,0.1)' },
+  bili:   { name:'B站',   color:'#00b5e2', colorAlpha:'rgba(0,181,226,0.1)' },
+  wx:     { name:'视频号',color:'#07c160', colorAlpha:'rgba(7,193,96,0.1)' },
+};
+
+function switchDepth(plat, btn) {
+  document.querySelectorAll('#depthPlatBtns .fbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  depthPlat = plat;
+  document.querySelectorAll('.depth-panel').forEach(p => p.style.display = 'none');
+  document.getElementById('depth-' + plat).style.display = 'block';
+  if (PD) renderDepth(plat);
+}
+
+async function loadPlatformData(force = false) {
+  const badge = document.getElementById('depthLoadingBadge');
+  if (badge) badge.style.display = 'flex';
+  try {
+    const url = force
+      ? `${API_BASE}/api/platforms/refresh`
+      : `${API_BASE}/api/platforms`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    PD = await resp.json();
+    if (badge) badge.style.display = 'none';
+    renderDepth(depthPlat);
+  } catch(e) {
+    if (badge) badge.style.display = 'none';
+    console.error('平台数据加载失败', e);
+    const panel = document.getElementById('depth-' + depthPlat);
+    if (panel) panel.innerHTML = `<div style="color:var(--muted);padding:20px;font-size:13px">⚠️ 平台数据加载失败：${e.message}</div>`;
+  }
+}
+
+function renderDepth(plat) {
+  if (!PD || !PD[plat]) return;
+  const cfg = PLAT_CFG[plat];
+  const pd = PD[plat];
+  if (plat === 'douyin') renderDouyin(pd, cfg);
+  else if (plat === 'ks') renderKs(pd, cfg);
+  else if (plat === 'bili') renderBili(pd, cfg);
+  else if (plat === 'wx') renderWx(pd, cfg);
+}
+
+// ─── 通用 KPI 生成 ────────────────────────────────
+function makeKpi(cards) {
+  return cards.map(c => {
+    const target = c.target !== undefined ? c.target : 0;
+    const suffix = c.suffix !== undefined ? c.suffix : '';
+    const decimals = c.decimals !== undefined ? c.decimals : 0;
+    return `<div class="kpi-card" style="--kpi-color:${c.color||'linear-gradient(90deg,#6c63ff,#3ecfcf)'}">
+      <div class="kpi-label"><span class="kpi-icon">${c.icon}</span>${c.label}</div>
+      <div class="kpi-value" data-target="${target}" data-suffix="${suffix}" data-decimals="${decimals}">0</div>
+      <div class="kpi-sub">${c.sub}</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── KPI 计数器统一触发（供各 tab 调用）───────────────
+function animateKpiCounters(containerId) {
+  setTimeout(() => {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.querySelectorAll('.kpi-value[data-target]').forEach(el => {
+      const target = parseFloat(el.dataset.target);
+      const suffix = el.dataset.suffix || '';
+      const decimals = parseInt(el.dataset.decimals || '0');
+      if (decimals > 0) {
+        counterUpFloat(el, target, 1500, decimals, suffix);
+      } else {
+        counterUp(el, target, 1500, suffix);
+      }
+    });
+  }, 50);
+}
+
+function platLineBar(canvasId, labels, datasets, key) {
+  destroyChart(key);
+  charts[key] = new Chart(document.getElementById(canvasId).getContext('2d'), {
+    type: 'line', data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 600 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, labels: { color:'#a0aec8', font:{size:10}, usePointStyle:true } },
+        tooltip: {
+          backgroundColor: '#1c2540', borderColor: 'rgba(255,255,255,0.1)', borderWidth:1,
+          titleColor:'#e2e8f8', bodyColor:'#a0aec8', padding:10, cornerRadius:8,
+          callbacks: { label: c => ` ${c.dataset.label}: ${fmt(c.raw)}` }
+        }
+      },
+      scales: {
+        x: { grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#5a6888',font:{size:10}} },
+        y: { position:'left', grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#5a6888',font:{size:10}} },
+        y1: { position:'right', grid:{drawOnChartArea:false}, ticks:{color:'#5a6888',font:{size:10}} }
+      }
+    }
+  });
+}
+function platBar(canvasId, labels, datasets, key) {
+  destroyChart(key);
+  charts[key] = new Chart(document.getElementById(canvasId).getContext('2d'), {
+    type: 'bar', data: { labels, datasets },
+    options: { ...baseOpts(), plugins: { ...baseOpts().plugins, legend: { display: true, labels: { color:'#a0aec8', font:{size:10}, usePointStyle:true } }, tooltip: { ...baseOpts().plugins.tooltip, mode:'index', intersect:false } } }
+  });
+}
+function platArea(canvasId, labels, data, color, colorAlpha, key, labelName, pctMode) {
+  destroyChart(key);
+  charts[key] = new Chart(document.getElementById(canvasId).getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets: [{ label: labelName||'', data, borderColor: color, backgroundColor: colorAlpha, tension:.4, pointRadius:2, fill:true }] },
+    options: {
+      ...baseOpts(),
+      plugins: { ...baseOpts().plugins, tooltip: { ...baseOpts().plugins.tooltip, callbacks: { label: c => pctMode ? ` ${(c.raw*100).toFixed(2)}%` : ` ${fmt(c.raw)}` } } }
+    }
+  });
+}
+
+function fmtPct(v) { return v ? (v * 100).toFixed(2) + '%' : '-'; }
+function fmtDate2(ts) {
+  if (!ts) return '-';
+  try { const d = new Date(ts); return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`; } catch { return '-'; }
+}
+
+// ─── 任务管理 ─────────────────────────────────────
+// 任务数据（动态加载，fallback 为内嵌数据）
+let TASK_DATA = [];
+let TASK_STATS = {};
+let taskFilterType = 'all';
+let taskFilterStatus = 'all';
+let taskSearchQuery = '';
+let taskLoading = false;
+
+// ── 加载任务数据（自动刷新时同步更新）───────────────
+async function fetchTaskData(force = false) {
+  try {
+    const url = force ? `${API_BASE}/api/tasks/refresh` : `${API_BASE}/api/tasks`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    TASK_DATA = data.tasks || [];
+    TASK_STATS = data.stats || {};
+    return data;
+  } catch (e) {
+    console.warn('任务数据加载失败，使用缓存:', e.message);
+    // 如果失败，尝试用内嵌 fallback
+    if (TASK_DATA.length === 0) {
+      console.warn('任务数据为空，请检查后端服务是否运行');
+    }
+    return null;
+  }
+}
+
+// ── 手动刷新任务 ────────────────────────────────────
+async function reloadTaskData() {
+  const btn = document.querySelector('#sec-tasks .btn-refresh');
+  if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
+  const badge = document.getElementById('taskLiveBadge');
+  if (badge) badge.classList.add('loading');
+
+  await fetchTaskData(true);
+  updateTaskStats();
+  renderTasksSection();
+
+  if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
+  const updatedAt = document.getElementById('taskUpdatedTime');
+  if (updatedAt) updatedAt.textContent = '更新：' + (TASK_STATS._updated_at || new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+  showToast('✅ 任务数据已更新');
+}
+
+// ── 更新统计卡片 ────────────────────────────────────
+function updateTaskStats() {
+  const tc = TASK_DATA.length;
+  const videoCount = TASK_DATA.filter(t => t.type === '视频').length;
+  const articleCount = TASK_DATA.filter(t => t.type === '推文').length;
+  const wikiCount = TASK_DATA.filter(t => t.type === '百科词条').length;
+  const publishedCount = TASK_DATA.filter(t => t.status === '已发布').length;
+  const ongoingCount = TASK_DATA.filter(t => t.status === '进行中').length;
+  const stalledCount = TASK_DATA.filter(t => t.status === '已停滞').length;
+  const pubRate = tc > 0 ? ((publishedCount / tc) * 100).toFixed(0) + '%' : '—';
+
+  // 牵头人数
+  const leads = new Set(TASK_DATA.filter(t => t.lead).map(t => t.lead));
+
+  const setEl = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val !== undefined ? val : '—'; };
+
+  setEl('taskTotalCount', tc);
+  setEl('taskVideoCount', videoCount);
+  setEl('taskArticleCount', articleCount);
+  setEl('taskPublishedCount', publishedCount);
+  setEl('taskPublishedSub', '完成率 ' + pubRate);
+  setEl('taskOngoingCount', ongoingCount);
+  setEl('taskStalledCount', stalledCount);
+  setEl('taskLiveSub', leads.size + ' 位牵头人');
+}
+
+// ── 渲染任务表格 ────────────────────────────────────
+function renderTasksSection() {
+  const tbody = document.getElementById('taskTbody');
+  if (!tbody) return;
+  if (TASK_DATA.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:60px 20px">
+      <div style="font-size:24px;margin-bottom:8px">📋</div>
+      <div style="font-size:13px">暂无任务数据，请检查后端服务是否运行</div>
+    </td></tr>`;
+    return;
+  }
+
+  const typeCls = {
+    '视频': 'video', '推文': 'article', '百科词条': 'wiki',
+    '图文': 'article', '直播': 'live', '摄影': 'photo'
+  };
+  const statusCls = {
+    '已发布':  'status-published',
+    '进行中':  'status-ongoing',
+    '已停滞':  'status-stalled',
+    '待开始':  'status-pending',
+    '待发布':  'status-waiting',
+    '审核中':  'status-review',
+  };
+  const statusColor = {
+    '已发布': '#22d3a3', '进行中': '#f5a623', '已停滞': '#ef4444',
+    '待开始': '#94a3b8', '待发布': '#60a5fa', '审核中': '#c084fc',
+  };
+
+  let list = TASK_DATA.filter(t => {
+    if (taskFilterType !== 'all' && t.type !== taskFilterType) return false;
+    if (taskFilterStatus !== 'all' && t.status !== taskFilterStatus) return false;
+    if (taskSearchQuery) {
+      const q = taskSearchQuery.toLowerCase();
+      return (t.title && t.title.toLowerCase().includes(q))
+          || (t.lead && t.lead.toLowerCase().includes(q))
+          || (t.author && t.author.toLowerCase().includes(q))
+          || (t.members && t.members.toLowerCase().includes(q))
+          || (t.code && t.code.toLowerCase().includes(q));
+    }
+    return true;
+  });
+
+  // 按最新时间排序：优先 done_date > publish_date > start_date，倒序（最新在上）
+  const getDateKey = (t) => {
+    const parse = (d) => d ? new Date(d).getTime() : 0;
+    return parse(t.done_date) || parse(t.publish_date) || parse(t.start_date);
+  };
+  list.sort((a, b) => getDateKey(b) - getDateKey(a));
+
+  tbody.innerHTML = list.map((t, i) => {
+    const sCls = statusCls[t.status] || '';
+    const sColor = statusColor[t.status] || '#5a6888';
+    return `<tr style="animation: waveIn 0.3s ease ${Math.min(i,20)*0.02}s both" data-id="${t.id}">
+      <td style="color:var(--muted);font-size:12px">${t.id}</td>
+      <td style="font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.title}">${t.title || '—'}</td>
+      <td><span class="task-tag ${typeCls[t.type] || 'video'}">${t.type || '—'}</span></td>
+      <td>${t.lead ? `<span class="task-person"><span class="avatar">${t.lead.charAt(0)}</span>${t.lead}</span>` : '<span style="color:var(--muted);font-size:12px">—</span>'}</td>
+      <td style="font-size:12px;color:${t.author ? 'var(--text2)' : 'var(--muted)'}">${t.author || '—'}</td>
+      <td><span class="task-status ${sCls}" style="color:${sColor};font-weight:600;font-size:12px">${t.status || '—'}</span></td>
+      <td style="font-size:12px;color:var(--text2)">${t.publish_date || '—'}</td>
+      <td style="font-size:12px;color:var(--text2)">${t.done_date || '—'}</td>
+      <td style="font-size:11px;color:var(--muted)">${t.code || '—'}</td>
+    </tr>`;
+  }).join('');
+
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:40px;font-size:13px">🔍 没有找到匹配的任务</td></tr>`;
+  }
+}
+
+function filterTasks() {
+  taskSearchQuery = document.getElementById('taskSearch').value.trim();
+  renderTasksSection();
+}
+
+function filterTaskType(type, el) {
+  taskFilterType = type;
+  document.querySelectorAll('.task-filter-bar .task-chip').forEach(c => c.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderTasksSection();
+}
+
+function filterTaskStatus(status, el) {
+  taskFilterStatus = status;
+  document.querySelectorAll('.task-filter-bar .task-chip').forEach(c => {
+    if (c.textContent.includes('状态')) c.classList.remove('active');
+  });
+  if (el) {
+    el.classList.add('active');
+    el.style.borderColor = statusColor[status] || 'var(--accent)';
+    el.style.color = statusColor[status] || 'var(--accent)';
+  }
+  renderTasksSection();
+}
+
+const statusColor = {
+  '已发布': '#22d3a3', '进行中': '#f5a623', '已停滞': '#ef4444',
+  '待开始': '#94a3b8', '待发布': '#60a5fa', '审核中': '#c084fc',
+};
+
+// ─── 抖音 ─────────────────────────────────────────
+function renderDouyin(pd, cfg) {
+  const t = pd.trend;
+  const n = t.labels.length;
+  // KPI
+  const avgFr = pd.avg_finish_rate;
+  document.getElementById('dy-kpi').innerHTML = makeKpi([
+    { label:'累计播放量', icon:'▶', color:'linear-gradient(90deg,#fe2c55,#ff6b35)', target: pd.total_play, sub:`${pd.total_records} 条视频` },
+    { label:'累计粉丝增量', icon:'👥', color:'linear-gradient(90deg,#f5a623,#fbbf24)', target: pd.total_fan, sub:'各视频涨粉合计' },
+    { label:'均完播率', icon:'⏱', color:'linear-gradient(90deg,#6c63ff,#a78bfa)', target: avgFr * 100, suffix:'%', decimals:2, sub:'有完播数据视频均值' },
+    { label:'累计收藏量', icon:'⭐', color:'linear-gradient(90deg,#3ecfcf,#0ea5e9)', target: pd.extra_totals.collect||0, sub:'长尾价值指标' },
+  ]);
+  animateKpiCounters('dy-kpi');
+  // 播放 + 涨粉
+  platLineBar('dy-trend-chart', t.labels, [
+    { label:'播放量', data: t.play, borderColor:'#fe2c55', backgroundColor:'rgba(254,44,85,0.08)', tension:.4, pointRadius:2, fill:true, yAxisID:'y' },
+    { label:'粉丝增量', data: t.fan_incr, borderColor:'#f5a623', backgroundColor:'rgba(245,166,35,0.08)', tension:.4, pointRadius:2, fill:false, yAxisID:'y1' },
+  ], 'dy-trend');
+  // 完播率
+  platArea('dy-finish-chart', t.labels, t.finish_rate, '#a78bfa', 'rgba(167,139,250,0.1)', 'dy-finish', '完播率', true);
+  // 互动
+  platBar('dy-engage-chart', t.labels, [
+    { label:'点赞', data:t.like, backgroundColor:'rgba(254,44,85,0.65)', borderRadius:3 },
+    { label:'评论', data:t.comment, backgroundColor:'rgba(62,207,207,0.65)', borderRadius:3 },
+    { label:'分享', data:t.share||[], backgroundColor:'rgba(255,110,180,0.65)', borderRadius:3 },
+  ], 'dy-engage');
+  // 收藏
+  platArea('dy-collect-chart', t.labels, t.collect||[], '#f5a623', 'rgba(245,166,35,0.1)', 'dy-collect', '收藏量', false);
+  // 主页访问
+  platArea('dy-home-chart', t.labels, t.home_visit||[], '#6c63ff', 'rgba(108,99,255,0.1)', 'dy-home', '主页访问', false);
+  // 表格
+  const rank = (i) => i<3 ? ['rank-1','rank-2','rank-3'][i] : 'rank-n';
+  document.getElementById('dy-tbody').innerHTML = (pd.top20||[]).map((v,i) => `
+    <tr>
+      <td><span class="rank-num ${rank(i)}">${i+1}</span></td>
+      <td><div class="v-title" title="${v.title||''}">${v.title||'-'}</div></td>
+      <td style="color:var(--muted);font-size:11px">${fmtDate2(v.ts)}</td>
+      <td style="color:var(--tt);font-weight:500">${fmt(v.play)}</td>
+      <td>${fmt(v.like)}</td>
+      <td>${fmt(v.comment)}</td>
+      <td>${fmt(v.share||0)}</td>
+      <td>${fmt(v.collect||0)}</td>
+      <td style="color:#a78bfa">${fmtPct(v.finish_rate)}</td>
+      <td style="color:var(--muted)">${v.avg_dur ? v.avg_dur.toFixed(1)+'s' : '-'}</td>
+      <td style="color:var(--amber)">${fmt(v.fan_incr||0)}</td>
+    </tr>`).join('');
+}
+
+// ─── 快手 ─────────────────────────────────────────
+function renderKs(pd, cfg) {
+  const t = pd.trend;
+  document.getElementById('ks-kpi').innerHTML = makeKpi([
+    { label:'累计播放量', icon:'▶', color:'linear-gradient(90deg,#ff6b35,#fbbf24)', target: pd.total_play, sub:`${pd.total_records} 条视频` },
+    { label:'累计粉丝增量', icon:'👥', color:'linear-gradient(90deg,#f5a623,#ff6b35)', target: pd.total_fan, sub:'各视频涨粉合计' },
+    { label:'均完播率', icon:'⏱', color:'linear-gradient(90deg,#6c63ff,#a78bfa)', target: (pd.avg_finish_rate||0)*100, suffix:'%', decimals:2, sub:'快手完播数据均值' },
+    { label:'累计收藏量', icon:'⭐', color:'linear-gradient(90deg,#3ecfcf,#0ea5e9)', target: pd.extra_totals.collect||0, sub:'收藏内容量' },
+  ]);
+  animateKpiCounters('ks-kpi');
+  platLineBar('ks-trend-chart', t.labels, [
+    { label:'播放量', data:t.play, borderColor:'#ff6b35', backgroundColor:'rgba(255,107,53,0.08)', tension:.4, pointRadius:2, fill:true, yAxisID:'y' },
+    { label:'粉丝增量', data:t.fan_incr, borderColor:'#f5a623', backgroundColor:'rgba(245,166,35,0.08)', tension:.4, pointRadius:2, fill:false, yAxisID:'y1' },
+  ], 'ks-trend');
+  platArea('ks-finish-chart', t.labels, t.finish_rate, '#ff6b35', 'rgba(255,107,53,0.1)', 'ks-finish', '完播率', true);
+  platBar('ks-engage-chart', t.labels, [
+    { label:'点赞', data:t.like, backgroundColor:'rgba(255,107,53,0.65)', borderRadius:3 },
+    { label:'评论', data:t.comment, backgroundColor:'rgba(62,207,207,0.65)', borderRadius:3 },
+    { label:'收藏', data:t.collect||[], backgroundColor:'rgba(245,166,35,0.65)', borderRadius:3 },
+  ], 'ks-engage');
+  const rank = (i) => i<3 ? ['rank-1','rank-2','rank-3'][i] : 'rank-n';
+  document.getElementById('ks-tbody').innerHTML = (pd.top20||[]).map((v,i) => `
+    <tr>
+      <td><span class="rank-num ${rank(i)}">${i+1}</span></td>
+      <td><div class="v-title" title="${v.title||''}">${v.title||'-'}</div></td>
+      <td style="color:var(--muted);font-size:11px">${fmtDate2(v.ts)}</td>
+      <td style="color:var(--ks);font-weight:500">${fmt(v.play)}</td>
+      <td>${fmt(v.like)}</td>
+      <td>${fmt(v.comment)}</td>
+      <td>${fmt(v.collect||0)}</td>
+      <td style="color:#a78bfa">${fmtPct(v.finish_rate)}</td>
+      <td style="color:var(--amber)">${fmt(v.fan_incr||0)}</td>
+    </tr>`).join('');
+}
+
+// ─── B站 ──────────────────────────────────────────
+function renderBili(pd, cfg) {
+  const t = pd.trend;
+  document.getElementById('bili-kpi').innerHTML = makeKpi([
+    { label:'累计播放量', icon:'▶', color:'linear-gradient(90deg,#00b5e2,#3ecfcf)', target: pd.total_play, sub:`${pd.total_records} 条视频` },
+    { label:'累计涨粉量', icon:'👥', color:'linear-gradient(90deg,#f5a623,#fbbf24)', target: pd.total_fan, sub:'各视频涨粉合计' },
+    { label:'累计投币量', icon:'🪙', color:'linear-gradient(90deg,#6c63ff,#a78bfa)', target: pd.extra_totals.coin||0, sub:'B站独有深度互动' },
+    { label:'累计弹幕量', icon:'💬', color:'linear-gradient(90deg,#ff6eb4,#fe2c55)', target: pd.extra_totals.danmu||0, sub:'弹幕是优质内容标志' },
+  ]);
+  animateKpiCounters('bili-kpi');
+  platLineBar('bili-trend-chart', t.labels, [
+    { label:'播放量', data:t.play, borderColor:'#00b5e2', backgroundColor:'rgba(0,181,226,0.08)', tension:.4, pointRadius:2, fill:true, yAxisID:'y' },
+    { label:'涨粉', data:t.fan_incr, borderColor:'#f5a623', backgroundColor:'rgba(245,166,35,0.08)', tension:.4, pointRadius:2, fill:false, yAxisID:'y1' },
+  ], 'bili-trend');
+  platBar('bili-deep-chart', t.labels, [
+    { label:'投币', data:t.coin||[], backgroundColor:'rgba(108,99,255,0.65)', borderRadius:3 },
+    { label:'收藏', data:t.collect||[], backgroundColor:'rgba(245,166,35,0.65)', borderRadius:3 },
+    { label:'弹幕', data:t.danmu||[], backgroundColor:'rgba(255,110,180,0.65)', borderRadius:3 },
+    { label:'转发', data:t.forward||[], backgroundColor:'rgba(62,207,207,0.65)', borderRadius:3 },
+  ], 'bili-deep');
+  platBar('bili-engage-chart', t.labels, [
+    { label:'点赞', data:t.like, backgroundColor:'rgba(0,181,226,0.65)', borderRadius:3 },
+    { label:'评论', data:t.comment, backgroundColor:'rgba(62,207,207,0.65)', borderRadius:3 },
+  ], 'bili-engage');
+  const rank = (i) => i<3 ? ['rank-1','rank-2','rank-3'][i] : 'rank-n';
+  document.getElementById('bili-tbody').innerHTML = (pd.top20||[]).map((v,i) => `
+    <tr>
+      <td><span class="rank-num ${rank(i)}">${i+1}</span></td>
+      <td><div class="v-title" title="${v.title||''}">${v.title||'-'}</div></td>
+      <td style="color:var(--muted);font-size:11px">${fmtDate2(v.ts)}</td>
+      <td style="color:var(--bili);font-weight:500">${fmt(v.play)}</td>
+      <td>${fmt(v.like)}</td>
+      <td>${fmt(v.comment)}</td>
+      <td style="color:#a78bfa">${fmt(v.coin||0)}</td>
+      <td style="color:var(--amber)">${fmt(v.collect||0)}</td>
+      <td style="color:var(--pink)">${fmt(v.danmu||0)}</td>
+      <td style="color:var(--accent2)">${fmt(v.forward||0)}</td>
+      <td style="color:var(--amber)">${fmt(v.fan_incr||0)}</td>
+    </tr>`).join('');
+}
+
+// ─── 视频号 ───────────────────────────────────────
+function renderWx(pd, cfg) {
+  const t = pd.trend;
+  document.getElementById('wx-kpi').innerHTML = makeKpi([
+    { label:'累计播放量', icon:'▶', color:'linear-gradient(90deg,#07c160,#22d3a3)', target: pd.total_play, sub:`${pd.total_records} 条视频` },
+    { label:'累计新增关注', icon:'👥', color:'linear-gradient(90deg,#f5a623,#fbbf24)', target: pd.total_fan, sub:'各视频新增关注合计' },
+    { label:'均完播率', icon:'⏱', color:'linear-gradient(90deg,#6c63ff,#a78bfa)', target: (pd.avg_finish_rate||0)*100, suffix:'%', decimals:2, sub:'视频号完播数据均值' },
+    { label:'累计推荐量', icon:'🔔', color:'linear-gradient(90deg,#3ecfcf,#0ea5e9)', target: pd.extra_totals.recommend||0, sub:'平台推荐分发次数' },
+  ]);
+  animateKpiCounters('wx-kpi');
+  platLineBar('wx-trend-chart', t.labels, [
+    { label:'播放量', data:t.play, borderColor:'#07c160', backgroundColor:'rgba(7,193,96,0.08)', tension:.4, pointRadius:2, fill:true, yAxisID:'y' },
+    { label:'推荐量', data:t.recommend||[], borderColor:'#3ecfcf', backgroundColor:'rgba(62,207,207,0.08)', tension:.4, pointRadius:2, fill:false, yAxisID:'y1' },
+  ], 'wx-trend');
+  platArea('wx-finish-chart', t.labels, t.finish_rate, '#07c160', 'rgba(7,193,96,0.1)', 'wx-finish', '完播率', true);
+  platBar('wx-engage-chart', t.labels, [
+    { label:'喜欢', data:t.like, backgroundColor:'rgba(7,193,96,0.65)', borderRadius:3 },
+    { label:'评论', data:t.comment, backgroundColor:'rgba(62,207,207,0.65)', borderRadius:3 },
+    { label:'分享', data:t.share||[], backgroundColor:'rgba(255,110,180,0.65)', borderRadius:3 },
+    { label:'转发聊天', data:t.forward_chat||[], backgroundColor:'rgba(245,166,35,0.65)', borderRadius:3 },
+  ], 'wx-engage');
+  const rank = (i) => i<3 ? ['rank-1','rank-2','rank-3'][i] : 'rank-n';
+  document.getElementById('wx-tbody').innerHTML = (pd.top20||[]).map((v,i) => `
+    <tr>
+      <td><span class="rank-num ${rank(i)}">${i+1}</span></td>
+      <td><div class="v-title" title="${v.title||''}">${v.title||'-'}</div></td>
+      <td style="color:var(--muted);font-size:11px">${fmtDate2(v.ts)}</td>
+      <td style="color:var(--wx);font-weight:500">${fmt(v.play)}</td>
+      <td>${fmt(v.like)}</td>
+      <td>${fmt(v.comment)}</td>
+      <td>${fmt(v.share||0)}</td>
+      <td style="color:var(--amber)">${fmt(v.forward_chat||0)}</td>
+      <td style="color:#a78bfa">${fmtPct(v.finish_rate)}</td>
+      <td style="color:var(--muted)">${v.avg_dur ? v.avg_dur.toFixed(1)+'s' : '-'}</td>
+      <td style="color:var(--green)">${fmt(v.fan_incr||0)}</td>
+    </tr>`).join('');
+}
+
+/* ════════════════════════════════════════════════════════
+   驾驶舱大屏 JS（嵌入仪表盘内部）
+════════════════════════════════════════════════════════ */
+let _cockpitInited = false;
+let _cockpitCharts = {};
+
+function fmtCockpitNum(n) {
+  if (n >= 1e8) return (n / 1e8).toFixed(1) + '亿';
+  if (n >= 1e4) return (n / 1e4).toFixed(1) + '万';
+  return n >= 0 ? Math.round(n).toLocaleString() : '—';
+}
+
+function countUpCockpit(el, target, dur = 1200) {
+  if (!el) return;
+  const start = performance.now();
+  function step(now) {
+    const prog = Math.min((now - start) / dur, 1);
+    const ease = 1 - Math.pow(1 - prog, 3);
+    el.textContent = fmtCockpitNum(Math.round(target * ease));
+    if (prog < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// 时钟
+function updateCockpitClock() {
+  const now = new Date();
+  const w = ['日', '一', '二', '三', '四', '五', '六'];
+  const c = document.getElementById('cockpitClock');
+  const d = document.getElementById('cockpitDate');
+  if (c) c.textContent = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  if (d) d.textContent = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日 星期' + w[now.getDay()];
+}
+
+// 辅助：聚合各平台月度趋势（从 /api/dashboard 的扁平 trend_* 数组汇总）
+function aggregateMonthlyTrend(dd) {
+  const labels = (dd.trend_labels || []).slice(-12);
+  const dy = (dd.trend_douyin || []).slice(-12);
+  const ks = (dd.trend_ks || []).slice(-12);
+  const bi = (dd.trend_bili || []).slice(-12);
+  const wx = (dd.trend_wx || []).slice(-12);
+  const play = labels.map((_, i) => (dy[i] || 0) + (ks[i] || 0) + (bi[i] || 0) + (wx[i] || 0));
+  // 格式化标签为 MM月
+  const fmtLabels = labels.map(l => {
+    const p = l.split('-');
+    return p.length >= 2 ? p[1] + '月' : l;
+  });
+  return { labels: fmtLabels, play };
+}
+
+// 辅助：从 dashboard 的 top20 取前5（每条记录有 plat 字段标识平台）
+function getTopVideos(dd) {
+  const top20 = dd.top20 || [];
+  return top20.slice(0, 5).map(v => ({
+    title: (v.title || v.desc || '未命名').replace(/[\r\n]+/g, ' ').trim(),
+    play: v.total_play || v.play || 0,
+    platform: v.plat || ''
+  }));
+}
+
+// 主入口
+async function initCockpit() {
+  if (_cockpitInited) return;
+  _cockpitInited = true;
+
+  updateCockpitClock();
+  setInterval(updateCockpitClock, 1000);
+
+  try {
+    // /api/dashboard: 扁平聚合数据（total_videos, plat_play, trend_*, top20）
+    // /api/platforms: 各平台独立数据（total_play, total_fan, avg_finish_rate）
+    const [dashResp, platResp] = await Promise.all([
+      fetch(API_BASE + '/api/dashboard').then(r => r.json()).catch(() => null),
+      fetch(API_BASE + '/api/platforms').then(r => r.json()).catch(() => null)
+    ]);
+    const dd = dashResp || {};
+    const pp = platResp || {};
+
+    // === KPI 数字 ===
+    countUpCockpit(document.getElementById('cockpitKpiTotal'), dd.total_videos || 0);
+    countUpCockpit(document.getElementById('cockpitKpiFans'), dd.total_fan || 0);
+    countUpCockpit(document.getElementById('cockpitKpiInteract'), dd.total_interact || 0);
+
+    // 发布率 = 已发布视频 / 原始视频总数
+    const totalVideos = dd.raw_videos || dd.total_videos || 1;
+    const published = dd.total_videos || 0;
+    const pct = Math.min(Math.round(published / totalVideos * 100), 100);
+    const rp = document.getElementById('cockpitRingPct');
+    if (rp) rp.textContent = pct + '%';
+    const ring = document.getElementById('cockpitRingProgress');
+    if (ring) {
+      const c = 2 * Math.PI * 40;
+      ring.style.strokeDasharray = c;
+      setTimeout(() => { ring.style.strokeDashoffset = c * (1 - pct / 100); }, 200);
+    }
+
+    // === 各模块渲染 ===
+    renderCockpitPlatDist(pp);              // 饼图：各平台粉丝分布
+    renderCockpitInteractPie(dd);           // 饼图：各平台互动分布（用 plat_like）
+    renderCockpitPlatStats(pp);             // 平台列表：播放量 + 粉丝增量
+    renderCockpitQuality(pp);               // 质量指标：各平台完播率
+    renderCockpitTrend(dd);                 // 月度趋势：汇总四平台播放
+    renderCockpitBar(pp);                   // 柱状图：四平台播放对比
+    renderCockpitMap({});                   // 3D地图
+    renderCockpitTopVideos(getTopVideos(dd)); // TOP5热门视频
+    renderCockpitTasks();                   // 任务进展
+    renderCockpitTrending();               // 热点选题建议
+
+    // 所有图表响应窗口大小变化
+    window.addEventListener('resize', () => {
+      Object.values(_cockpitCharts).forEach(c => { if (c && c.resize) c.resize(); });
+    });
+
+  } catch (e) {
+    console.warn('驾驶舱数据加载失败:', e.message);
+    showCockpitDemo();
+  }
+}
+
+// 平台分布饼图（粉丝分布）
+function renderCockpitPlatDist(pp) {
+  const map = { douyin: { name: '抖音', color: '#fe2c55' }, ks: { name: '快手', color: '#ff6b35' }, bili: { name: 'B站', color: '#00b5e2' }, wx: { name: '视频号', color: '#07c160' } };
+  const data = Object.entries(map).map(([k, v]) => ({ name: v.name, value: (pp[k]?.total_fan || 0), itemStyle: { color: v.color } })).filter(d => d.value > 0);
+  const dom = document.getElementById('cockpitPlatDistChart');
+  if (!dom) return;
+  const chart = echarts.init(dom);
+  _cockpitCharts.platDist = chart;
+  chart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)', backgroundColor: 'rgba(6,14,26,0.95)', borderColor: 'rgba(0,168,255,0.3)', textStyle: { color: '#e0eeff', fontSize: 11 } },
+    series: [{
+      type: 'pie', radius: ['45%', '72%'], center: ['50%', '55%'], avoidLabelOverlap: false,
+      label: { show: true, formatter: '{b}\n{d}%', fontSize: 9, color: '#7aa8cc', lineHeight: 12 },
+      labelLine: { show: true, lineStyle: { color: 'rgba(0,168,255,0.3)' } },
+      data: data.length ? data : Object.values(map).map(v => ({ name: v.name, value: 0, itemStyle: { color: v.color } }))
+    }]
+  });
+}
+
+// 平台互动分布饼图（点赞分布，使用 /api/dashboard 的 plat_like 数据）
+function renderCockpitInteractPie(dd) {
+  const dom = document.getElementById('cockpitTypePieChart');
+  if (!dom) return;
+  const chart = echarts.init(dom);
+  _cockpitCharts.interactPie = chart;
+  const map = { douyin: { name: '抖音', color: '#fe2c55' }, ks: { name: '快手', color: '#ff6b35' }, bili: { name: 'B站', color: '#00b5e2' }, wx: { name: '视频号', color: '#07c160' } };
+  const platLike = dd.plat_like || {};
+  const data = Object.entries(map).map(([k, v]) => ({ name: v.name, value: platLike[k] || 0, itemStyle: { color: v.color } })).filter(d => d.value > 0);
+  chart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)', backgroundColor: 'rgba(6,14,26,0.95)', borderColor: 'rgba(0,168,255,0.3)', textStyle: { color: '#e0eeff', fontSize: 11 } },
+    series: [{
+      type: 'pie', radius: ['40%', '68%'], center: ['50%', '52%'], avoidLabelOverlap: false,
+      label: { show: true, formatter: '{b}\n{d}%', fontSize: 9, color: '#7aa8cc', lineHeight: 12 },
+      labelLine: { show: true, lineStyle: { color: 'rgba(0,168,255,0.3)' } },
+      data: data.length ? data : Object.values(map).map(v => ({ name: v.name, value: 0, itemStyle: { color: v.color } }))
+    }]
+  });
+}
+
+// 平台数据列表
+function renderCockpitPlatStats(pp) {
+  const map = [
+    { key: 'douyin', name: '抖音', color: '#fe2c55' },
+    { key: 'ks', name: '快手', color: '#ff6b35' },
+    { key: 'bili', name: 'B站', color: '#00b5e2' },
+    { key: 'wx', name: '视频号', color: '#07c160' }
+  ];
+  const el = document.getElementById('cockpitPlatStatsList');
+  if (!el) return;
+  el.innerHTML = map.map(m => {
+    const p = pp[m.key] || {};
+    const play = fmtCockpitNum(p.total_play || 0);
+    const fanIncr = p.extra_totals?.fan_incr || 0;
+    const incr = fanIncr >= 0 ? `<span class="cockpit-plat-change up">+${fmtCockpitNum(fanIncr)}</span>` : `<span class="cockpit-plat-change down">${fmtCockpitNum(fanIncr)}</span>`;
+    return `<div class="cockpit-plat">
+      <div style="display:flex;align-items:center"><div class="cockpit-plat-dot" style="background:${m.color}"></div><span class="cockpit-plat-name">${m.name}</span></div>
+      <div style="text-align:right"><span class="cockpit-plat-val">${play}</span>${incr}</div>
+    </div>`;
+  }).join('');
+}
+
+// 质量指标
+function renderCockpitQuality(pp) {
+  const metrics = [];
+  const map = { douyin: '抖音', ks: '快手', bili: 'B站', wx: '视频号' };
+  const colors = { douyin: '#fe2c55', ks: '#ff6b35', bili: '#00b5e2', wx: '#07c160' };
+  ['douyin', 'ks', 'bili', 'wx'].forEach(k => {
+    const p = pp[k];
+    if (p && p.avg_finish_rate != null) metrics.push({ name: map[k] + '完播率', val: p.avg_finish_rate, color: colors[k] });
+  });
+  if (!metrics.length) {
+    ['douyin', 'ks', 'bili', 'wx'].forEach(k => metrics.push({ name: map[k] + '完播率', val: 0, color: colors[k] }));
+  }
+  const el = document.getElementById('cockpitQualityMetrics');
+  if (!el) return;
+  el.innerHTML = metrics.map(m => `
+    <div class="cockpit-prog">
+      <div class="cockpit-prog-header"><span class="cockpit-prog-name">${m.name}</span><span class="cockpit-prog-val">${(m.val * 100).toFixed(1)}%</span></div>
+      <div class="cockpit-prog-bar"><div class="cockpit-prog-fill" style="width:0%;background:linear-gradient(90deg,${m.color},${m.color}aa)" data-target="${(m.val * 100).toFixed(1)}"></div></div>
+    </div>`).join('');
+  setTimeout(() => { el.querySelectorAll('.cockpit-prog-fill').forEach(bar => { bar.style.width = bar.dataset.target + '%'; }); }, 300);
+}
+
+// 热门视频 TOP5
+function renderCockpitTopVideos(list) {
+  const top5 = (list || []).slice(0, 5);
+  const el = document.getElementById('cockpitTopVideoList');
+  if (!el) return;
+  if (!top5.length) { el.innerHTML = '<div style="text-align:center;color:#3d6080;padding:20px;font-size:11px">暂无数据</div>'; return; }
+  el.innerHTML = top5.map((v, i) => `
+    <div class="cockpit-list">
+      <div style="display:flex;align-items:center;flex:1;min-width:0">
+        <span class="cockpit-rank cockpit-rank-${i < 3 ? (i + 1) : 'n'}">${i + 1}</span>
+        <span class="cockpit-list-title" title="${v.title || ''}">${v.title || '—'}</span>
+      </div>
+      <span class="cockpit-list-val">${fmtCockpitNum(v.play || 0)}</span>
+    </div>`).join('');
+}
+
+// 任务进展（从任务API获取实际数据）
+function renderCockpitTasks() {
+  const el = document.getElementById('cockpitTaskProgressList');
+  if (!el) return;
+  // 先显示骨架
+  const statuses = [
+    { label: '已发布', color: '#00ffcc', key: 'published' },
+    { label: '进行中', color: '#f5a623', key: 'in_progress' },
+    { label: '待发布', color: '#60a5fa', key: 'pending' },
+  ];
+  el.innerHTML = statuses.map(s => `
+    <div class="cockpit-list">
+      <div style="display:flex;align-items:center">
+        <div style="width:6px;height:6px;border-radius:50%;background:${s.color};margin-right:8px;flex-shrink:0"></div>
+        <span style="font-size:11px;color:#7aa8cc">${s.label}</span>
+      </div>
+      <span class="cockpit-list-val" id="cockpitTask_${s.key}" style="color:${s.color}">—</span>
+    </div>`).join('');
+  // 异步拉取任务数据更新
+  fetch(API_BASE + '/api/tasks').then(r => r.json()).then(d => {
+    const tasks = d.tasks || [];
+    const counts = { published: 0, in_progress: 0, pending: 0 };
+    tasks.forEach(t => {
+      const status = (t.status || '').trim();
+      if (status === '已发布') counts.published++;
+      else if (status === '进行中') counts.in_progress++;
+      else if (['待发布', '待开始', '审核中'].includes(status)) counts.pending++;
+    });
+    Object.entries(counts).forEach(([k, v]) => {
+      const el2 = document.getElementById('cockpitTask_' + k);
+      if (el2) el2.textContent = v;
+    });
+  }).catch(() => {});
+}
+
+// ── 热点选题建议 ──────────────────────────────────────────────
+async function renderCockpitTrending() {
+  const el = document.getElementById('cockpitTrendingList');
+  const timeEl = document.getElementById('cockpitTrendingTime');
+  if (!el) return;
+  try {
+    const resp = await fetch(API_BASE + '/api/trending');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const items = data.items || [];
+    if (!items.length) {
+      el.innerHTML = '<div class="cockpit-trending-empty">暂无热搜数据</div>';
+      return;
+    }
+    el.innerHTML = items.map((it, idx) => {
+      const rank = idx + 1;
+      const rankCls = rank === 1 ? 'top1' : rank === 2 ? 'top2' : rank === 3 ? 'top3' : 'topn';
+      const hotStr = it.hot > 10000 ? (it.hot / 10000).toFixed(1) + '万' : (it.hot > 0 ? it.hot.toLocaleString() : '');
+      return `
+      <div class="cockpit-trending-item">
+        <div class="cockpit-trending-rank ${rankCls}">${rank}</div>
+        <div class="cockpit-trending-body">
+          <div class="cockpit-trending-kw" title="${(it.keyword||'').replace(/"/g,'&quot;')}">${it.keyword || '—'}</div>
+          <div class="cockpit-trending-suggest">${it.suggestion || ''}</div>
+          <div class="cockpit-trending-meta">
+            <span class="cockpit-trending-src">${it.source || '热搜'}</span>
+            ${hotStr ? `<span class="cockpit-trending-hot">🔥 ${hotStr}</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    if (timeEl && data.updated_at) timeEl.textContent = '更新: ' + data.updated_at;
+  } catch (e) {
+    el.innerHTML = '<div class="cockpit-trending-empty">热搜数据加载失败，请检查后端服务</div>';
+    console.warn('[trending]', e);
+  }
+}
+
+async function refreshCockpitTrending() {
+  const btn = document.getElementById('cockpitTrendingRefreshBtn');
+  const el = document.getElementById('cockpitTrendingList');
+  if (btn) { btn.textContent = '⟳ 刷新中'; btn.style.pointerEvents = 'none'; }
+  if (el) el.innerHTML = '<div class="cockpit-trending-empty">刷新中...</div>';
+  try {
+    const resp = await fetch(API_BASE + '/api/trending/refresh');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const timeEl = document.getElementById('cockpitTrendingTime');
+    const items = data.items || [];
+    if (!items.length) {
+      el.innerHTML = '<div class="cockpit-trending-empty">暂无热搜数据</div>';
+      return;
+    }
+    el.innerHTML = items.map((it, idx) => {
+      const rank = idx + 1;
+      const rankCls = rank === 1 ? 'top1' : rank === 2 ? 'top2' : rank === 3 ? 'top3' : 'topn';
+      const hotStr = it.hot > 10000 ? (it.hot / 10000).toFixed(1) + '万' : (it.hot > 0 ? it.hot.toLocaleString() : '');
+      return `
+      <div class="cockpit-trending-item">
+        <div class="cockpit-trending-rank ${rankCls}">${rank}</div>
+        <div class="cockpit-trending-body">
+          <div class="cockpit-trending-kw" title="${(it.keyword||'').replace(/"/g,'&quot;')}">${it.keyword || '—'}</div>
+          <div class="cockpit-trending-suggest">${it.suggestion || ''}</div>
+          <div class="cockpit-trending-meta">
+            <span class="cockpit-trending-src">${it.source || '热搜'}</span>
+            ${hotStr ? `<span class="cockpit-trending-hot">🔥 ${hotStr}</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    if (timeEl && data.updated_at) timeEl.textContent = '更新: ' + data.updated_at;
+  } catch (e) {
+    if (el) el.innerHTML = '<div class="cockpit-trending-empty">刷新失败</div>';
+  } finally {
+    if (btn) { btn.textContent = '↻ 刷新'; btn.style.pointerEvents = ''; }
+  }
+}
+// ── end trending ──────────────────────────────────────────────
+
+// ── 热点选题页面（独立 Tab）──────────────────────────────────
+async function renderTrendingPage(force) {
+  const listEl = document.getElementById('trendingPageList');
+  const timeEl = document.getElementById('trendingPageTime');
+  if (!listEl) return;
+  listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:32px 0;">加载中...</div>';
+  try {
+    const url = API_BASE + (force ? '/api/trending/refresh' : '/api/trending');
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const items = data.items || [];
+    if (!items.length) {
+      listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:32px 0;">暂无热搜数据</div>';
+      return;
+    }
+    listEl.innerHTML = items.map((it, idx) => {
+      const rank = idx + 1;
+      const rankColor = rank === 1 ? '#ffd700' : rank === 2 ? '#c0c0c0' : rank === 3 ? '#cd7f32' : '#3d6080';
+      const rankBg   = rank === 1 ? 'rgba(255,215,0,0.12)' : rank === 2 ? 'rgba(192,192,192,0.1)' : rank === 3 ? 'rgba(205,127,50,0.1)' : 'rgba(0,168,255,0.06)';
+      const hotStr = it.hot > 10000 ? (it.hot / 10000).toFixed(1) + '万' : (it.hot > 0 ? it.hot.toLocaleString() : '');
+      return `
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);cursor:default;transition:background .15s;border-radius:6px;"
+           onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background=''">
+        <div style="min-width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:${rankColor};background:${rankBg};flex-shrink:0;">${rank}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${(it.keyword||'').replace(/"/g,'&quot;')}">${it.keyword || '—'}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.55;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">💡 ${it.suggestion || '暂无建议'}</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+            <span style="font-size:11px;padding:2px 7px;border-radius:4px;background:rgba(108,99,255,0.12);color:#8b7fff;">${it.source || '热搜'}</span>
+            ${hotStr ? `<span style="font-size:11px;color:var(--muted);">🔥 ${hotStr}</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    if (timeEl && data.updated_at) timeEl.textContent = '更新: ' + data.updated_at;
+  } catch (e) {
+    listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:32px 0;">热搜数据加载失败，请确认后端服务已启动</div>';
+    console.warn('[trendingPage]', e);
+  }
+}
+
+async function refreshTrendingPage() {
+  const btn = document.getElementById('trendingPageRefreshBtn');
+  if (btn) { btn.textContent = '⟳ 刷新中...'; btn.disabled = true; }
+  await renderTrendingPage(true);
+  if (btn) { btn.textContent = '↻ 刷新热搜'; btn.disabled = false; }
+}
+// ── end trendingPage ──────────────────────────────────────────
+
+// 月度趋势（汇总四平台）
+function renderCockpitTrend(monthly) {
+  const dom = document.getElementById('cockpitTrendChart');
+  if (!dom) return;
+  const chart = echarts.init(dom);
+  _cockpitCharts.trend = chart;
+  const labels = (monthly.labels || []).slice(-12);
+  const play = (monthly.play || []).slice(-12);
+  chart.setOption({
+    backgroundColor: 'transparent',
+    grid: { top: 8, right: 8, bottom: 16, left: 36 },
+    tooltip: { trigger: 'axis', backgroundColor: 'rgba(6,14,26,0.95)', borderColor: 'rgba(0,168,255,0.3)', textStyle: { color: '#e0eeff', fontSize: 10 }, axisPointer: { type: 'line', lineStyle: { color: 'rgba(0,168,255,0.2)' } } },
+    xAxis: { type: 'category', data: labels, axisLine: { lineStyle: { color: 'rgba(0,168,255,0.15)' } }, axisLabel: { color: '#3d6080', fontSize: 9 }, splitLine: { show: false }, axisTick: { show: false } },
+    yAxis: { type: 'value', axisLine: { show: false }, axisLabel: { color: '#3d6080', fontSize: 9, formatter: v => v >= 10000 ? (v / 10000).toFixed(0) + 'w' : v }, splitLine: { lineStyle: { color: 'rgba(0,168,255,0.06)' } }, axisTick: { show: false } },
+    series: [{
+      type: 'line', data: play, smooth: 0.4,
+      lineStyle: { color: '#00a8ff', width: 2, shadowBlur: 6, shadowColor: 'rgba(0,168,255,0.5)' },
+      areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(0,168,255,0.25)' }, { offset: 1, color: 'rgba(0,168,255,0.01)' }]) },
+      symbol: 'circle', symbolSize: 4, itemStyle: { color: '#00a8ff', borderColor: '#fff', borderWidth: 1 }
+    }]
+  });
+}
+
+// 平台柱状对比
+function renderCockpitBar(pp) {
+  const dom = document.getElementById('cockpitBarChart');
+  if (!dom) return;
+  const chart = echarts.init(dom);
+  _cockpitCharts.bar = chart;
+  const map = { douyin: { name: '抖音', color: '#fe2c55' }, ks: { name: '快手', color: '#ff6b35' }, bili: { name: 'B站', color: '#00b5e2' }, wx: { name: '视频号', color: '#07c160' } };
+  const names = Object.values(map).map(m => m.name);
+  const plays = Object.keys(map).map(k => (pp[k]?.total_play || 0));
+  chart.setOption({
+    backgroundColor: 'transparent',
+    grid: { top: 8, right: 8, bottom: 16, left: 36 },
+    tooltip: { trigger: 'axis', backgroundColor: 'rgba(6,14,26,0.95)', borderColor: 'rgba(0,168,255,0.3)', textStyle: { color: '#e0eeff', fontSize: 10 }, axisPointer: { type: 'shadow' } },
+    legend: { show: false },
+    xAxis: { type: 'category', data: names, axisLine: { lineStyle: { color: 'rgba(0,168,255,0.15)' } }, axisLabel: { color: '#7aa8cc', fontSize: 9 }, splitLine: { show: false }, axisTick: { show: false } },
+    yAxis: { type: 'value', axisLine: { show: false }, axisLabel: { color: '#3d6080', fontSize: 9, formatter: v => v >= 10000 ? (v / 10000).toFixed(0) + 'w' : v }, splitLine: { lineStyle: { color: 'rgba(0,168,255,0.06)' } }, axisTick: { show: false } },
+    series: [{
+      name: '播放量', type: 'bar', data: plays, barWidth: 10,
+      itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(0,168,255,0.8)' }, { offset: 1, color: 'rgba(0,168,255,0.15)' }]), borderRadius: [3, 3, 0, 0] },
+      shadowBlur: 8, shadowColor: 'rgba(0,168,255,0.3)'
+    }]
+  });
+}
+
+// 3D 地图
+function renderCockpitMap(regionData) {
+  const dom = document.getElementById('cockpitMapChart');
+  if (!dom) return;
+  const chart = echarts.init(dom);
+  _cockpitCharts.map = chart;
+
+  const provinces = [
+    { name: '甘肃', value: 980, coord: [103.8, 36.1] },
+    { name: '北京', value: 1200, coord: [116.4, 39.9] },
+    { name: '上海', value: 2100, coord: [121.5, 31.2] },
+    { name: '广东', value: 3200, coord: [113.3, 23.1] },
+    { name: '浙江', value: 1800, coord: [120.2, 30.3] },
+    { name: '四川', value: 1100, coord: [104.1, 30.7] },
+    { name: '陕西', value: 850, coord: [108.9, 36.2] },
+    { name: '新疆', value: 320, coord: [87.6, 43.8] },
+    { name: '青海', value: 180, coord: [97.3, 35.9] },
+    { name: '西藏', value: 90, coord: [91.1, 29.6] },
+    { name: '宁夏', value: 260, coord: [106.3, 38.5] },
+    { name: '内蒙古', value: 420, coord: [111.7, 40.8] },
+    { name: '重庆', value: 760, coord: [106.5, 29.5] },
+    { name: '云南', value: 580, coord: [101.5, 25.0] },
+    { name: '贵州', value: 490, coord: [106.7, 26.6] },
+    { name: '广西', value: 620, coord: [108.3, 23.3] },
+    { name: '海南', value: 280, coord: [110.3, 20.0] },
+    { name: '湖南', value: 730, coord: [112.9, 28.2] },
+    { name: '湖北', value: 810, coord: [114.3, 30.6] },
+    { name: '河南', value: 950, coord: [113.6, 34.8] },
+    { name: '山东', value: 1400, coord: [118.0, 36.7] },
+    { name: '江苏', value: 1900, coord: [119.5, 33.9] },
+    { name: '安徽', value: 680, coord: [117.3, 31.9] },
+    { name: '福建', value: 920, coord: [118.3, 26.1] },
+    { name: '江西', value: 540, coord: [116.0, 27.1] },
+    { name: '山西', value: 580, coord: [112.5, 37.9] },
+    { name: '河北', value: 860, coord: [114.5, 38.0] },
+    { name: '天津', value: 720, coord: [117.2, 39.1] },
+    { name: '辽宁', value: 650, coord: [123.4, 41.8] },
+    { name: '吉林', value: 420, coord: [125.3, 43.9] },
+    { name: '黑龙江', value: 380, coord: [128.6, 47.7] },
+  ];
+
+  // ResizeObserver 确保图表随容器自适应
+  const ro = new ResizeObserver(() => chart.resize());
+  ro.observe(dom);
+
+  fetch('https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json')
+    .then(r => r.json())
+    .then(geoJson => {
+      echarts.registerMap('china', geoJson);
+      buildCockpitMap();
+    })
+    .catch(() => buildCockpitSimpleMap());
+
+  function buildCockpitMap() {
+    chart.setOption({
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: 'rgba(6,14,26,0.95)',
+        borderColor: 'rgba(0,168,255,0.3)',
+        textStyle: { color: '#e0eeff', fontSize: 11 },
+        formatter: p => `${p.name}<br/>传播指数: ${p.value ? p.value[2] || '—' : '—'}`
+      },
+      geo3D: {
+        map: 'china', roam: true, regionHeight: 0.3,
+        itemStyle: { color: '#0a1f3d', opacity: 0.95, borderWidth: 0.5, borderColor: 'rgba(0,168,255,0.25)' },
+        emphasis: { itemStyle: { color: '#0d2a4a' }, regionHeight: 0.45 },
+        light: { main: { intensity: 1.2, shadowQuality: 'medium', shadow: false, alpha: 50, beta: 30 }, ambient: { intensity: 0.4 } },
+        viewControl: { distance: 75, alpha: 38, beta: 15, center: [0, 0, 0], autoRotate: false },
+        groundPlane: { show: false },
+        postEffect: { enable: false }
+      },
+      series: [{
+        type: 'bar3D', coordinateSystem: 'geo3D',
+        data: provinces.map(p => ({
+          value: [...p.coord, p.value / 20],
+          name: p.name,
+          itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(0,212,255,0.95)' },
+            { offset: 1, color: 'rgba(0,168,255,0.2)' }
+          ]) }
+        })),
+        barSize: 0.7, shading: 'lambert',
+        label: { show: false },
+        emphasis: { itemStyle: { color: 'rgba(0,230,255,0.9)' } },
+        animation: true, animationDurationUpdate: 1800
+      }]
+    });
+    setTimeout(() => chart.resize(), 50);
+  }
+
+  function buildCockpitSimpleMap() {
+    // 2D地图备用
+    fetch('https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json')
+      .then(r => r.json())
+      .then(geoJson => {
+        echarts.registerMap('china', geoJson);
+        chart.setOption({
+          backgroundColor: 'transparent',
+          tooltip: { trigger: 'item', backgroundColor: 'rgba(6,14,26,0.95)', borderColor: 'rgba(0,168,255,0.3)', textStyle: { color: '#e0eeff' } },
+          geo: {
+            map: 'china', roam: false,
+            itemStyle: { areaColor: '#0a1f3d', borderColor: 'rgba(0,168,255,0.25)', borderWidth: 0.5 },
+            emphasis: { itemStyle: { areaColor: '#0d3060' } },
+            label: { show: false }
+          },
+          series: [{
+            type: 'effectScatter', coordinateSystem: 'geo',
+            data: provinces.map(p => ({ name: p.name, value: [...p.coord, p.value] })),
+            symbolSize: d => Math.max(4, Math.min(18, d[2] / 100)),
+            rippleEffect: { brushType: 'stroke', scale: 2.5, period: 3 },
+            itemStyle: { color: 'rgba(0,168,255,0.8)', shadowBlur: 8, shadowColor: 'rgba(0,168,255,0.5)' },
+            label: { show: false }, zlevel: 2
+          }]
+        });
+        setTimeout(() => chart.resize(), 50);
+      })
+      .catch(() => {
+        chart.setOption({
+          backgroundColor: 'transparent',
+          graphic: [{ type: 'text', left: 'center', top: 'middle', style: { text: '地图加载失败\n请检查网络连接', fill: 'rgba(0,168,255,0.4)', fontSize: 14, textAlign: 'center' } }]
+        });
+      });
+  }
+
+  window.addEventListener('resize', () => chart.resize());
+}
+
+// 示例数据
+function showCockpitDemo() {
+  countUpCockpit(document.getElementById('cockpitKpiTotal'), 1256);
+  countUpCockpit(document.getElementById('cockpitKpiFans'), 89234);
+  countUpCockpit(document.getElementById('cockpitKpiInteract'), 2345678);
+  const rp = document.getElementById('cockpitRingPct');
+  if (rp) rp.textContent = '72%';
+  const ring = document.getElementById('cockpitRingProgress');
+  if (ring) {
+    const c = 2 * Math.PI * 40;
+    setTimeout(() => { ring.style.strokeDasharray = c; ring.style.strokeDashoffset = c * (1 - 0.72); }, 200);
+  }
+  renderCockpitMap({});
+  renderCockpitTrend({ labels: ['1月', '2月', '3月', '4月', '5月', '6月'], play: [12000, 18500, 22000, 19000, 28000, 35000] });
+  renderCockpitBar({ douyin: { total_play: 32850000 }, ks: { total_play: 80697 }, bili: { total_play: 43324 }, wx: { total_play: 2194143 } });
+  renderCockpitPlatDist({ douyin: { total_fan: 6092 }, ks: { total_fan: 140 }, bili: { total_fan: 62 }, wx: { total_fan: 259 } });
+  renderCockpitQuality({ douyin: { avg_finish_rate: 0.0242 }, ks: { avg_finish_rate: 0.015 }, bili: { avg_finish_rate: 0.12 }, wx: { avg_finish_rate: 0.08 } });
+  renderCockpitTopVideos([
+    { title: '民大樱花季 · 最美校园', play: 125000 },
+    { title: '民族服饰变装挑战', play: 98000 },
+    { title: '考研上岸经验分享', play: 76000 },
+    { title: '西北民大美食探店', play: 54000 },
+    { title: '校园Vlog · 一天实录', play: 42000 }
+  ]);
+  renderCockpitTasks();
+  renderCockpitTrending();
+}
+
+</script>
+
+</body>
+</html>

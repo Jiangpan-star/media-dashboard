@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>融媒体数据驾驶舱 · 西北民族大学</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#040810;
+  --bg2:#060e1a;
+  --bg3:#0a1628;
+  --bg4:#0f1f3d;
+  --border:rgba(0,168,255,0.12);
+  --border2:rgba(0,168,255,0.25);
+  --text:#e0eeff;
+  --text2:#7aa8cc;
+  --muted:#3d6080;
+  --blue:#00a8ff;
+  --blue2:#00d4ff;
+  --cyan:#00ffcc;
+  --gold:#ffd700;
+  --tt:#fe2c55;
+  --ks:#ff6b35;
+  --bili:#00b5e2;
+  --wx:#07c160;
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  height:100vh;
+  overflow:hidden;
+  font-size:13px;
+}
+
+/* ── 粒子背景 ── */
+#particles{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  pointer-events:none;z-index:0;
+}
+
+/* ── 全局光晕 ── */
+body::before{
+  content:'';position:fixed;
+  top:-300px;left:-100px;width:700px;height:700px;
+  background:radial-gradient(circle,rgba(0,168,255,0.06)0%,transparent 70%);
+  pointer-events:none;z-index:0;
+}
+body::after{
+  content:'';position:fixed;
+  bottom:-300px;right:-100px;width:700px;height:700px;
+  background:radial-gradient(circle,rgba(0,255,204,0.04)0%,transparent 70%);
+  pointer-events:none;z-index:0;
+}
+
+/* ── 整体布局 ── */
+.cockpit{
+  position:relative;z-index:1;
+  display:grid;
+  grid-template-columns:220px 1fr 240px;
+  grid-template-rows:auto 1fr;
+  gap:10px;
+  padding:10px;
+  height:100vh;
+  max-height:100vh;
+  overflow:hidden;
+}
+
+/* ── 顶栏 ── */
+.top-bar{
+  grid-column:1/-1;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 20px;
+  background:linear-gradient(180deg,rgba(0,168,255,0.08) 0%,transparent 100%);
+  border:1px solid var(--border);
+  border-radius:8px;
+  position:relative;
+}
+.top-bar::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,168,255,0.5),rgba(0,255,204,0.3),transparent);
+}
+.top-bar-left{display:flex;align-items:center;gap:10px}
+.top-logo{width:32px;height:32px;border-radius:50%;object-fit:cover;box-shadow:0 0 12px rgba(0,168,255,0.3)}
+.top-bar-title{
+  font-size:18px;font-weight:700;letter-spacing:3px;
+  background:linear-gradient(90deg,#00a8ff,#00ffcc);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  text-shadow:none;
+}
+.top-bar-sub{font-size:11px;color:var(--muted);letter-spacing:2px}
+.top-bar-center{
+  font-size:11px;color:var(--muted);letter-spacing:1px;
+  position:absolute;left:50%;transform:translateX(-50%);
+}
+.top-bar-right{display:flex;align-items:center;gap:14px}
+.time-display{
+  font-size:22px;font-weight:700;color:var(--blue);
+  font-variant-numeric:tabular-nums;letter-spacing:2px;
+}
+.date-display{font-size:11px;color:var(--muted);text-align:right;line-height:1.5}
+
+/* ── 左侧面板 ── */
+.left-panel{
+  display:flex;flex-direction:column;gap:8px;
+  overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:none;
+  min-width:0;
+}
+.left-panel::-webkit-scrollbar{display:none}
+
+/* ── 通用卡片 ── */
+.panel-card{
+  background:linear-gradient(135deg,rgba(6,14,26,0.95) 0%,rgba(10,22,40,0.9) 100%);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:14px;
+  position:relative;
+  overflow:hidden;
+  transition:border-color .3s;
+}
+.panel-card:hover{border-color:var(--border2)}
+.panel-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,168,255,0.3),transparent);
+}
+.panel-card-title{
+  font-size:10px;color:var(--muted);letter-spacing:2px;
+  text-transform:uppercase;margin-bottom:6px;
+}
+.panel-card-value{
+  font-size:28px;font-weight:800;
+  background:linear-gradient(90deg,#00a8ff,#00d4ff);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  line-height:1.1;
+}
+.panel-card-sub{font-size:10px;color:var(--text2);margin-top:4px}
+
+/* 环形进度 */
+.ring-card{position:relative}
+.ring-wrap{
+  width:90px;height:90px;margin:8px auto 0;
+  position:relative;
+}
+.ring-wrap svg{transform:rotate(-90deg)}
+.ring-bg{fill:none;stroke:rgba(0,168,255,0.1);stroke-width:6}
+.ring-fill{
+  fill:none;stroke:url(#ringGrad);stroke-width:6;
+  stroke-linecap:round;
+  stroke-dasharray:251;stroke-dashoffset:251;
+  transition:stroke-dashoffset 1.5s cubic-bezier(.4,0,.2,1);
+  filter:drop-shadow(0 0 4px rgba(0,168,255,0.6));
+}
+.ring-center{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;
+}
+.ring-pct{font-size:18px;font-weight:800;color:var(--blue)}
+.ring-label{font-size:9px;color:var(--muted)}
+
+/* 迷你柱状图 */
+.mini-bars{display:flex;align-items:flex-end;gap:4px;margin-top:10px;height:50px}
+.mini-bar{
+  flex:1;border-radius:2px 2px 0 0;
+  transition:height 1s ease;position:relative;cursor:default;
+  min-height:4px;
+}
+.mini-bar:hover::after{
+  content:attr(data-label);position:absolute;top:-20px;left:50%;transform:translateX(-50%);
+  background:var(--bg4);border:1px solid var(--border2);
+  border-radius:4px;padding:2px 5px;font-size:9px;color:var(--text);white-space:nowrap;
+  z-index:10;
+}
+.bar-label{font-size:9px;color:var(--muted);margin-top:4px;text-align:center}
+
+/* 平台卡片 */
+.plat-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 0;border-bottom:1px solid rgba(0,168,255,0.06);
+}
+.plat-item:last-child{border-bottom:none}
+.plat-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.plat-name{font-size:11px;color:var(--text2);flex:1;margin-left:8px}
+.plat-val{font-size:13px;font-weight:700;color:var(--text)}
+.plat-change{
+  font-size:10px;margin-left:6px;
+  font-weight:600;
+}
+.plat-change.up{color:#00ffcc}
+.plat-change.down{color:#ff4d4d}
+
+/* 列表项 */
+.list-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:7px 0;border-bottom:1px solid rgba(0,168,255,0.05);
+  font-size:11px;
+}
+.list-item:last-child{border-bottom:none}
+.list-rank{
+  width:16px;height:16px;border-radius:4px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:700;margin-right:8px;flex-shrink:0;
+}
+.rank-1{background:rgba(255,215,0,0.2);color:#ffd700;border:1px solid rgba(255,215,0,0.3)}
+.rank-2{background:rgba(192,192,192,0.15);color:#c0c0c0;border:1px solid rgba(192,192,192,0.25)}
+.rank-3{background:rgba(205,127,50,0.15);color:#cd7f32;border:1px solid rgba(205,127,50,0.25)}
+.rank-n{background:rgba(0,168,255,0.08);color:var(--muted)}
+.list-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text2)}
+.list-val{font-weight:600;color:var(--blue);margin-left:8px;font-variant-numeric:tabular-nums}
+
+/* ── 中间面板 ── */
+.center-panel{
+  display:flex;flex-direction:column;gap:8px;
+  min-height:0;overflow:hidden;
+}
+.map-card{
+  flex:1;min-height:0;
+  background:linear-gradient(135deg,rgba(6,14,26,0.95) 0%,rgba(10,22,40,0.9) 100%);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:12px;
+  position:relative;overflow:hidden;
+  display:flex;flex-direction:column;
+}
+.map-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,168,255,0.3),transparent);
+}
+.map-title{
+  font-size:11px;color:var(--muted);letter-spacing:2px;
+  text-transform:uppercase;margin-bottom:8px;
+  display:flex;align-items:center;gap:8px;
+}
+.map-title::before{
+  content:'';display:inline-block;width:3px;height:12px;border-radius:2px;
+  background:linear-gradient(180deg,#00a8ff,#00ffcc);
+}
+#mapChart{width:100%;flex:1;min-height:0}
+
+.bottom-charts{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;
+}
+.chart-card{
+  background:linear-gradient(135deg,rgba(6,14,26,0.95) 0%,rgba(10,22,40,0.9) 100%);
+  border:1px solid var(--border);
+  border-radius:10px;padding:12px;
+  position:relative;overflow:hidden;
+}
+.chart-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,168,255,0.3),transparent);
+}
+.chart-title{
+  font-size:10px;color:var(--muted);letter-spacing:2px;
+  text-transform:uppercase;margin-bottom:8px;
+  display:flex;align-items:center;gap:6px;
+}
+.chart-title::before{
+  content:'';display:inline-block;width:3px;height:10px;border-radius:2px;
+  background:linear-gradient(180deg,#00a8ff,#00ffcc);
+}
+#trendChart,#barChart{width:100%;height:120px}
+
+/* ── 右侧面板 ── */
+.right-panel{
+  display:flex;flex-direction:column;gap:8px;
+  overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:none;
+  min-width:0;
+}
+.right-panel::-webkit-scrollbar{display:none}
+.table-wrap{
+  max-height:200px;overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:rgba(0,168,255,0.2) transparent;
+}
+.table-wrap::-webkit-scrollbar{width:3px}
+.table-wrap::-webkit-scrollbar-thumb{background:rgba(0,168,255,0.2);border-radius:2px}
+
+/* 分类饼图 */
+.pie-wrap{width:100%;height:130px}
+
+/* 指标进度条 */
+.prog-item{margin-bottom:10px}
+.prog-item:last-child{margin-bottom:0}
+.prog-header{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:5px;
+}
+.prog-name{font-size:10px;color:var(--text2)}
+.prog-val{font-size:11px;font-weight:700;color:var(--blue)}
+.prog-bar{
+  height:4px;border-radius:2px;background:rgba(0,168,255,0.1);
+  overflow:hidden;
+}
+.prog-fill{
+  height:100%;border-radius:2px;
+  background:linear-gradient(90deg,#00a8ff,#00ffcc);
+  transition:width 1.2s cubic-bezier(.4,0,.2,1);
+  box-shadow:0 0 6px rgba(0,168,255,0.4);
+}
+
+/* ── 扫描线动画 ── */
+@keyframes scanLine{
+  0%{transform:translateY(-100%)}
+  100%{transform:translateY(100vh)}
+}
+.scan-line{
+  position:fixed;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,rgba(0,168,255,0.15),transparent);
+  pointer-events:none;z-index:999;
+  animation:scanLine 8s linear infinite;
+}
+
+/* ── 呼吸光环 ── */
+@keyframes breathe{
+  0%,100%{opacity:0.6}
+  50%{opacity:1}
+}
+.breathe{animation:breathe 3s ease-in-out infinite}
+
+/* ── 滚动数字 ── */
+@keyframes countUp{
+  from{opacity:0;transform:translateY(8px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.count-anim{animation:countUp .6s ease}
+
+/* ── 边框光效 ── */
+@keyframes borderGlow{
+  0%,100%{border-color:rgba(0,168,255,0.12)}
+  50%{border-color:rgba(0,168,255,0.3)}
+}
+.glow-pulse{border-color:rgba(0,168,255,0.12);animation:borderGlow 3s ease-in-out infinite}
+
+/* ── 响应式 ── */
+@media(max-width:1200px){
+  .cockpit{grid-template-columns:180px 1fr 200px}
+  .panel-card-value{font-size:22px}
+  .ring-wrap{width:70px;height:70px}
+}
+@media(max-width:900px){
+  .cockpit{grid-template-columns:1fr;grid-template-rows:auto}
+  .left-panel,.right-panel{flex-direction:row;flex-wrap:wrap}
+  .left-panel>*,.right-panel>*{flex:1 1 45%}
+  .bottom-charts{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- 扫描线 -->
+<div class="scan-line"></div>
+
+<!-- 粒子背景 -->
+<canvas id="particles"></canvas>
+
+<!-- SVG 渐变定义 -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00a8ff"/>
+      <stop offset="100%" stop-color="#00ffcc"/>
+    </linearGradient>
+    <linearGradient id="barGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00a8ff" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#00a8ff" stop-opacity="0.1"/>
+    </linearGradient>
+    <linearGradient id="barGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00ffcc" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#00ffcc" stop-opacity="0.1"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<div class="cockpit">
+
+  <!-- ══════ 顶部标题栏 ══════ -->
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <img class="top-logo" src="logo_emblem.png" alt="校徽">
+      <div>
+        <div class="top-bar-title">融媒体数据驾驶舱</div>
+        <div class="top-bar-sub">NORTHWEST MINZU UNIVERSITY · MEDIA DATA COCKPIT</div>
+      </div>
+    </div>
+    <div class="top-bar-center">西北民族大学融媒体中心 · 数据驱动传播</div>
+    <div class="top-bar-right">
+      <div>
+        <div class="time-display" id="clock">00:00:00</div>
+        <div class="date-display" id="dateStr">0000年00月00日 星期零</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ 左侧面板 ══════ -->
+  <div class="left-panel">
+
+    <!-- 视频总数 + 环形进度 -->
+    <div class="panel-card ring-card">
+      <div class="panel-card-title">视频总量</div>
+      <div class="panel-card-value" id="kpi-total">—</div>
+      <div class="panel-card-sub">累计发布视频 · 覆盖四平台</div>
+      <div class="ring-wrap">
+        <svg viewBox="0 0 90 90" width="90" height="90">
+          <circle class="ring-bg" cx="45" cy="45" r="40"/>
+          <circle class="ring-fill" id="ringProgress" cx="45" cy="45" r="40"/>
+        </svg>
+        <div class="ring-center">
+          <div class="ring-pct" id="ringPct">0%</div>
+          <div class="ring-label">发布率</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 总粉丝 -->
+    <div class="panel-card">
+      <div class="panel-card-title">累计粉丝</div>
+      <div class="panel-card-value" id="kpi-fans">—</div>
+      <div class="panel-card-sub">四平台粉丝总量</div>
+    </div>
+
+    <!-- 总互动 -->
+    <div class="panel-card">
+      <div class="panel-card-title">累计互动</div>
+      <div class="panel-card-value" id="kpi-interact">—</div>
+      <div class="panel-card-sub">点赞+评论+分享+收藏</div>
+    </div>
+
+    <!-- 平台分布 -->
+    <div class="panel-card">
+      <div class="panel-card-title">平台粉丝分布</div>
+      <div id="platDistChart" style="width:100%;height:110px;margin-top:4px"></div>
+    </div>
+
+    <!-- 各平台数据 -->
+    <div class="panel-card">
+      <div class="panel-card-title">平台数据</div>
+      <div id="platStatsList"></div>
+    </div>
+
+  </div>
+
+  <!-- ══════ 中间面板 ══════ -->
+  <div class="center-panel">
+
+    <!-- 3D 中国地图 -->
+    <div class="map-card">
+      <div class="map-title">内容传播地域分布 · CONTENT DISTRIBUTION</div>
+      <div id="mapChart"></div>
+    </div>
+
+    <!-- 底部图表 -->
+    <div class="bottom-charts">
+      <div class="chart-card">
+        <div class="chart-title">月度播放趋势 · MONTHLY TREND</div>
+        <div id="trendChart"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">平台播放对比 · PLATFORM COMPARE</div>
+        <div id="barChart"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══════ 右侧面板 ══════ -->
+  <div class="right-panel">
+
+    <!-- 内容类型占比 -->
+    <div class="panel-card">
+      <div class="panel-card-title">内容类型分布</div>
+      <div id="typePieChart" class="pie-wrap"></div>
+    </div>
+
+    <!-- 完播率指标 -->
+    <div class="panel-card">
+      <div class="panel-card-title">核心质量指标</div>
+      <div id="qualityMetrics"></div>
+    </div>
+
+    <!-- 热门视频 TOP5 -->
+    <div class="panel-card" style="flex:1">
+      <div class="panel-card-title">热门视频 TOP5</div>
+      <div class="table-wrap" id="topVideoList"></div>
+    </div>
+
+    <!-- TOP10 任务进展 -->
+    <div class="panel-card">
+      <div class="panel-card-title">任务进展 TOP5</div>
+      <div id="taskProgressList"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════
+   时间显示
+══════════════════════════════════════════════════ */
+function updateClock(){
+  const now=new Date();
+  const w=['日','一','二','三','四','五','六'];
+  document.getElementById('clock').textContent=
+    now.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+  document.getElementById('dateStr').textContent=
+    now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日 星期'+w[now.getDay()];
+}
+updateClock();setInterval(updateClock,1000);
+
+/* ══════════════════════════════════════════════════
+   粒子背景
+══════════════════════════════════════════════════ */
+(function(){
+  const c=document.getElementById('particles');
+  const ctx=c.getContext('2d');
+  let W,H,ps=[];
+  function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight}
+  function init(){
+    ps=Array.from({length:60},()=>({
+      x:Math.random()*W,y:Math.random()*H,
+      r:Math.random()*1.5+0.3,
+      vx:(Math.random()-0.5)*0.3,vy:(Math.random()-0.5)*0.3,
+      a:Math.random()*0.5+0.1
+    }));
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    ps.forEach(p=>{
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(0,168,255,${p.a})`;
+      ctx.fill();
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.x<0||p.x>W)p.vx*=-1;
+      if(p.y<0||p.y>H)p.vy*=-1;
+    });
+    // 连线
+    for(let i=0;i<ps.length;i++){
+      for(let j=i+1;j<ps.length;j++){
+        const dx=ps[i].x-ps[j].x,dy=ps[i].y-ps[j].y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<120){
+          ctx.beginPath();
+          ctx.moveTo(ps[i].x,ps[i].y);
+          ctx.lineTo(ps[j].x,ps[j].y);
+          ctx.strokeStyle=`rgba(0,168,255,${(1-d/120)*0.08})`;
+          ctx.lineWidth=0.5;
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+  resize();init();draw();
+  window.addEventListener('resize',()=>{resize();init()});
+})();
+
+/* ══════════════════════════════════════════════════
+   数字动画
+══════════════════════════════════════════════════ */
+function fmtNum(n){
+  if(n>=1e8)return(n/1e8).toFixed(1)+'亿';
+  if(n>=1e4)return(n/1e4).toFixed(1)+'万';
+  return n>=0?Math.round(n).toLocaleString():'—';
+}
+function countUp(el,target,dur=1200){
+  const start=performance.now();
+  const from=0;
+  function step(now){
+    const prog=Math.min((now-start)/dur,1);
+    const ease=1-Math.pow(1-prog,3);
+    el.textContent=fmtNum(Math.round(from+(target-from)*ease));
+    if(prog<1)requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/* ══════════════════════════════════════════════════
+   主数据加载
+══════════════════════════════════════════════════ */
+const API_BASE='http://localhost:8765';
+
+async function initCockpit(){
+  try{
+    const [dashResp,platResp]=await Promise.all([
+      fetch(API_BASE+'/api/dashboard').then(r=>r.json()).catch(()=>null),
+      fetch(API_BASE+'/api/platforms').then(r=>r.json()).catch(()=>null)
+    ]);
+    const d=dashResp||{};
+    const p=platResp||{};
+
+    // KPI 数字动画
+    if(d.kpi){
+      countUp(document.getElementById('kpi-total'),d.kpi.total_videos||0);
+      countUp(document.getElementById('kpi-fans'),d.kpi.total_fans||0);
+      countUp(document.getElementById('kpi-interact'),d.kpi.total_interactions||0);
+      // 环形进度（已发布/总数）
+      const total=d.kpi.total_videos||1;
+      const published=d.kpi.published_videos||0;
+      const pct=Math.round(published/total*100);
+      document.getElementById('ringPct').textContent=pct+'%';
+      const circumference=2*Math.PI*40; // r=40
+      document.getElementById('ringProgress').style.strokeDasharray=circumference;
+      setTimeout(()=>{
+        document.getElementById('ringProgress').style.strokeDashoffset=
+          circumference*(1-pct/100);
+      },200);
+    }
+
+    // 平台分布饼图
+    renderPlatDistChart(p.platforms||{});
+    // 平台数据列表
+    renderPlatStats(p.platforms||{});
+    // 质量指标
+    renderQualityMetrics(p.platforms||{});
+    // 底部趋势图
+    renderTrendChart(p.monthly||{});
+    // 底部柱状图
+    renderBarChart(p.platforms||{});
+    // 3D地图
+    renderMap(d.regions||{});
+    // 热门视频
+    renderTopVideos(p.top20||[]);
+    // 任务进展
+    renderTaskProgress();
+
+  } catch(e){
+    console.warn('驾驶舱数据加载失败:',e.message);
+    // 显示示例数据
+    showDemoData();
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   平台分布饼图
+══════════════════════════════════════════════════ */
+function renderPlatDistChart(platforms){
+  const map={
+    douyin:{name:'抖音',color:'#fe2c55'},
+    ks:{name:'快手',color:'#ff6b35'},
+    bili:{name:'B站',color:'#00b5e2'},
+    wx:{name:'视频号',color:'#07c160'}
+  };
+  const data=Object.entries(map).map(([k,v])=>({
+    name:v.name,value:platforms[k]?.fans||0,itemStyle:{color:v.color}
+  })).filter(d=>d.value>0);
+
+  const chart=echarts.init(document.getElementById('platDistChart'));
+  chart.setOption({
+    backgroundColor:'transparent',
+    tooltip:{trigger:'item',formatter:'{b}: {c} ({d}%)',backgroundColor:'rgba(6,14,26,0.95)',borderColor:'rgba(0,168,255,0.3)',textStyle:{color:'#e0eeff',fontSize:11}},
+    series:[{
+      type:'pie',radius:['45%','72%'],center:['50%','55%'],
+      avoidLabelOverlap:false,
+      label:{show:true,formatter:'{b}\n{d}%',fontSize:9,color:'#7aa8cc',lineHeight:12},
+      labelLine:{show:true,lineStyle:{color:'rgba(0,168,255,0.3)'}},
+      data:data.length?data:[
+        {name:'抖音',value:0,itemStyle:{color:'#fe2c55'}},
+        {name:'快手',value:0,itemStyle:{color:'#ff6b35'}},
+        {name:'B站',value:0,itemStyle:{color:'#00b5e2'}},
+        {name:'视频号',value:0,itemStyle:{color:'#07c160'}},
+      ]
+    }]
+  });
+}
+
+/* ══════════════════════════════════════════════════
+   平台数据列表
+══════════════════════════════════════════════════ */
+function renderPlatStats(platforms){
+  const map=[
+    {key:'douyin',name:'抖音',color:'#fe2c55',icon:'&#x1F3AC;'},
+    {key:'ks',name:'快手',color:'#ff6b35',icon:'&#x1F3AE;'},
+    {key:'bili',name:'B站',color:'#00b5e2',icon:'&#x1F439;'},
+    {key:'wx',name:'视频号',color:'#07c160',icon:'&#x1F4F1;'}
+  ];
+  const el=document.getElementById('platStatsList');
+  el.innerHTML=map.map(m=>{
+    const p=platforms[m.key]||{};
+    const play=fmtNum(p.play||0);
+    const incr=p.fan_incr>=0?`<span class="plat-change up">+${fmtNum(p.fan_incr||0)}</span>`:`<span class="plat-change down">${fmtNum(p.fan_incr||0)}</span>`;
+    return `<div class="plat-item">
+      <div style="display:flex;align-items:center">
+        <div class="plat-dot" style="background:${m.color}"></div>
+        <span class="plat-name">${m.name}</span>
+      </div>
+      <div style="text-align:right">
+        <span class="plat-val">${play}</span>
+        ${incr}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════════
+   质量指标进度条
+══════════════════════════════════════════════════ */
+function renderQualityMetrics(platforms){
+  const metrics=[];
+  ['douyin','ks','bili','wx'].forEach(k=>{
+    const p=platforms[k];
+    if(!p)return;
+    const map={douyin:'抖音',ks:'快手',bili:'B站',wx:'视频号'};
+    const colors={douyin:'#fe2c55',ks:'#ff6b35',bili:'#00b5e2',wx:'#07c160'};
+    if(p.finish_rate!=null){
+      metrics.push({name:map[k]+'完播率',val:p.finish_rate,color:colors[k]});
+    }
+  });
+  if(!metrics.length){
+    metrics.push(
+      {name:'抖音完播率',val:0,color:'#fe2c55'},
+      {name:'快手完播率',val:0,color:'#ff6b35'},
+      {name:'B站完播率',val:0,color:'#00b5e2'},
+      {name:'视频号完播率',val:0,color:'#07c160'}
+    );
+  }
+  const el=document.getElementById('qualityMetrics');
+  el.innerHTML=metrics.map(m=>`
+    <div class="prog-item">
+      <div class="prog-header">
+        <span class="prog-name">${m.name}</span>
+        <span class="prog-val">${(m.val*100).toFixed(1)}%</span>
+      </div>
+      <div class="prog-bar"><div class="prog-fill" style="width:0%;background:linear-gradient(90deg,${m.color},${m.color}aa)" data-target="${(m.val*100).toFixed(1)}"></div></div>
+    </div>`).join('');
+  // 动画进度条
+  setTimeout(()=>{
+    el.querySelectorAll('.prog-fill').forEach(bar=>{
+      bar.style.width=bar.dataset.target+'%';
+    });
+  },300);
+}
+
+/* ══════════════════════════════════════════════════
+   热门视频 TOP5
+══════════════════════════════════════════════════ */
+function renderTopVideos(top20){
+  const list=(top20||[]).slice(0,5);
+  const colors=['#ffd700','#c0c0c0','#cd7f32','#00a8ff','#00a8ff'];
+  const el=document.getElementById('topVideoList');
+  if(!list.length){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px;font-size:11px">暂无数据</div>';
+    return;
+  }
+  el.innerHTML=list.map((v,i)=>`
+    <div class="list-item">
+      <div style="display:flex;align-items:center;flex:1;min-width:0">
+        <span class="list-rank rank-${i+1}">${i+1}</span>
+        <span class="list-title" title="${v.title||''}">${v.title||'—'}</span>
+      </div>
+      <span class="list-val">${fmtNum(v.play||0)}</span>
+    </div>`).join('');
+}
+
+/* ══════════════════════════════════════════════════
+   任务进展 TOP5
+══════════════════════════════════════════════════ */
+function renderTaskProgress(){
+  const el=document.getElementById('taskProgressList');
+  const statuses=[
+    {label:'已发布',color:'#00ffcc',order:0},
+    {label:'进行中',color:'#f5a623',order:1},
+    {label:'待发布',color:'#60a5fa',order:2},
+  ];
+  el.innerHTML= statuses.map(s=>`
+    <div class="list-item">
+      <div style="display:flex;align-items:center">
+        <div style="width:6px;height:6px;border-radius:50%;background:${s.color};margin-right:8px;flex-shrink:0"></div>
+        <span style="font-size:11px;color:var(--text2)">${s.label}</span>
+      </div>
+      <span class="list-val" style="color:${s.color}">—</span>
+    </div>`).join('');
+}
+
+/* ══════════════════════════════════════════════════
+   3D 地图（ECharts GL 中国地图）
+══════════════════════════════════════════════════ */
+function renderMap(regionData){
+  const mapEl=document.getElementById('mapChart');
+  const chart=echarts.init(mapEl);
+  // 省份数据（模拟传播热度）
+  const provinces=[
+    {name:'甘肃',value:980,coord:[103.8,36.1]},
+    {name:'北京',value:1200,coord:[116.4,39.9]},
+    {name:'上海',value:2100,coord:[121.5,31.2]},
+    {name:'广东',value:3200,coord:[113.3,23.1]},
+    {name:'浙江',value:1800,coord:[120.2,30.3]},
+    {name:'四川',value:1100,coord:[104.1,30.7]},
+    {name:'陕西',value:850,coord:[108.9,36.2]},
+    {name:'新疆',value:320,coord:[87.6,43.8]},
+    {name:'青海',value:180,coord:[97.3,35.9]},
+    {name:'西藏',value:90,coord:[91.1,29.6]},
+    {name:'宁夏',value:260,coord:[106.3,38.5]},
+    {name:'内蒙古',value:420,coord:[111.7,40.8]},
+    {name:'重庆',value:760,coord:[106.5,29.5]},
+    {name:'云南',value:580,coord:[101.5,25.0]},
+    {name:'贵州',value:490,coord:[106.7,26.6]},
+    {name:'广西',value:620,coord:[108.3,23.3]},
+    {name:'海南',value:280,coord:[110.3,20.0]},
+    {name:'湖南',value:730,coord:[112.9,28.2]},
+    {name:'湖北',value:810,coord:[114.3,30.6]},
+    {name:'河南',value:950,coord:[113.6,34.8]},
+    {name:'山东',value:1400,coord:[118.0,36.7]},
+    {name:'江苏',value:1900,coord:[119.5,33.9]},
+    {name:'安徽',value:680,coord:[117.3,31.9]},
+    {name:'福建',value:920,coord:[118.3,26.1]},
+    {name:'江西',value:540,coord:[116.0,27.1]},
+    {name:'山西',value:580,coord:[112.5,37.9]},
+    {name:'河北',value:860,coord:[114.5,38.0]},
+    {name:'天津',value:720,coord:[117.2,39.1]},
+    {name:'辽宁',value:650,coord:[123.4,41.8]},
+    {name:'吉林',value:420,coord:[125.3,43.9]},
+    {name:'黑龙江',value:380,coord:[128.6,47.7]},
+  ];
+
+  // 注册地图（使用在线GeoJSON，fetch替代jQuery）
+  fetch('https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json')
+    .then(r=>r.json())
+    .then(geoJson=>{
+      echarts.registerMap('china',geoJson);
+      buildMap();
+    })
+    .catch(()=>{
+      // 如果网络失败，用简化的散点图
+      buildSimpleMap();
+    });
+
+  // 使用 ResizeObserver 监听容器尺寸变化，确保图表自适应
+  const ro=new ResizeObserver(()=>chart.resize());
+  ro.observe(mapEl);
+
+  function buildMap(){
+    chart.setOption({
+      backgroundColor:'transparent',
+      tooltip:{
+        trigger:'item',
+        backgroundColor:'rgba(6,14,26,0.95)',
+        borderColor:'rgba(0,168,255,0.3)',
+        textStyle:{color:'#e0eeff',fontSize:11},
+        formatter:p=>`${p.name}<br/>传播指数: ${p.value?p.value[2]||'—':'—'}`
+      },
+      geo3D:{
+        map:'china',roam:true,
+        regionHeight:0.3,
+        itemStyle:{color:'#0a1f3d',opacity:0.95,borderWidth:0.5,borderColor:'rgba(0,168,255,0.25)'},
+        emphasis:{itemStyle:{color:'#0d2a4a'},regionHeight:0.45},
+        light:{
+          main:{intensity:1.2,shadowQuality:'medium',shadow:false,alpha:50,beta:30},
+          ambient:{intensity:0.4}
+        },
+        viewControl:{distance:75,alpha:38,beta:15,center:[0,0,0],autoRotate:false},
+        groundPlane:{show:false},
+        postEffect:{enable:false},
+      },
+      series:[{
+        type:'bar3D',
+        coordinateSystem:'geo3D',
+        data:provinces.map(p=>({
+          value:[...p.coord, p.value/20],
+          name:p.name,
+          itemStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[
+            {offset:0,color:'rgba(0,212,255,0.95)'},
+            {offset:1,color:'rgba(0,168,255,0.2)'}
+          ])}
+        })),
+        barSize:0.7,
+        shading:'lambert',
+        label:{show:false},
+        emphasis:{itemStyle:{color:'rgba(0,230,255,0.9)'}},
+        animation:true,animationDurationUpdate:1800,
+      }]
+    });
+    setTimeout(()=>chart.resize(),50);
+  }
+
+  function buildSimpleMap(){
+    // 2D地图备用（当WebGL或网络不可用时）
+    fetch('https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json')
+      .then(r=>r.json())
+      .then(geoJson=>{
+        echarts.registerMap('china',geoJson);
+        chart.setOption({
+          backgroundColor:'transparent',
+          tooltip:{trigger:'item',backgroundColor:'rgba(6,14,26,0.95)',borderColor:'rgba(0,168,255,0.3)',textStyle:{color:'#e0eeff',fontSize:11}},
+          geo:{
+            map:'china',roam:false,
+            itemStyle:{areaColor:'#0a1f3d',borderColor:'rgba(0,168,255,0.25)',borderWidth:0.5},
+            emphasis:{itemStyle:{areaColor:'#0d3060'}},
+            label:{show:false},
+          },
+          series:[{
+            type:'effectScatter',
+            coordinateSystem:'geo',
+            data:provinces.map(p=>({name:p.name,value:[...p.coord,p.value]})),
+            symbolSize:d=>Math.max(4,Math.min(18,d[2]/100)),
+            rippleEffect:{brushType:'stroke',scale:2.5,period:3},
+            itemStyle:{color:'rgba(0,168,255,0.8)',shadowBlur:8,shadowColor:'rgba(0,168,255,0.5)'},
+            label:{show:false},
+            zlevel:2,
+          }]
+        });
+        setTimeout(()=>chart.resize(),50);
+      })
+      .catch(()=>{
+        chart.setOption({
+          backgroundColor:'transparent',
+          graphic:[{type:'text',left:'center',top:'middle',style:{text:'地图加载失败\n请检查网络连接',fill:'rgba(0,168,255,0.4)',fontSize:14,textAlign:'center'}}]
+        });
+      });
+  }
+
+  window.addEventListener('resize',()=>chart.resize());
+}
+
+/* ══════════════════════════════════════════════════
+   月度趋势图
+══════════════════════════════════════════════════ */
+function renderTrendChart(monthly){
+  const chart=echarts.init(document.getElementById('trendChart'));
+  const labels=(monthly.labels||[]).slice(-12);
+  const play=(monthly.play||[]).slice(-12);
+  chart.setOption({
+    backgroundColor:'transparent',
+    grid:{top:8,right:8,bottom:16,left:36},
+    tooltip:{trigger:'axis',backgroundColor:'rgba(6,14,26,0.95)',borderColor:'rgba(0,168,255,0.3)',textStyle:{color:'#e0eeff',fontSize:10},axisPointer:{type:'line',lineStyle:{color:'rgba(0,168,255,0.2)'}}},
+    xAxis:{type:'category',data:labels,axisLine:{lineStyle:{color:'rgba(0,168,255,0.15)'}},axisLabel:{color:'#3d6080',fontSize:9},splitLine:{show:false},axisTick:{show:false}},
+    yAxis:{type:'value',axisLine:{show:false},axisLabel:{color:'#3d6080',fontSize:9,formatter:v=>v>=10000?(v/10000).toFixed(0)+'w':v},splitLine:{lineStyle:{color:'rgba(0,168,255,0.06)'}},axisTick:{show:false}},
+    series:[{
+      type:'line',data:play,
+      smooth:0.4,
+      lineStyle:{color:'#00a8ff',width:2,shadowBlur:6,shadowColor:'rgba(0,168,255,0.5)'},
+      areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[
+        {offset:0,color:'rgba(0,168,255,0.25)'},
+        {offset:1,color:'rgba(0,168,255,0.01)'}
+      ])},
+      symbol:'circle',symbolSize:4,
+      itemStyle:{color:'#00a8ff',borderColor:'#fff',borderWidth:1}
+    }]
+  });
+  window.addEventListener('resize',()=>chart.resize());
+}
+
+/* ══════════════════════════════════════════════════
+   平台柱状对比图
+══════════════════════════════════════════════════ */
+function renderBarChart(platforms){
+  const chart=echarts.init(document.getElementById('barChart'));
+  const map={douyin:{name:'抖音',color:'#fe2c55'},ks:{name:'快手',color:'#ff6b35'},bili:{name:'B站',color:'#00b5e2'},wx:{name:'视频号',color:'#07c160'}};
+  const names=Object.values(map).map(m=>m.name);
+  const plays=Object.keys(map).map(k=>platforms[k]?.play||0);
+  const fans=Object.keys(map).map(k=>platforms[k]?.fans||0);
+  chart.setOption({
+    backgroundColor:'transparent',
+    grid:{top:8,right:8,bottom:16,left:36},
+    tooltip:{trigger:'axis',backgroundColor:'rgba(6,14,26,0.95)',borderColor:'rgba(0,168,255,0.3)',textStyle:{color:'#e0eeff',fontSize:10},axisPointer:{type:'shadow'}},
+    legend:{show:false},
+    xAxis:{type:'category',data:names,axisLine:{lineStyle:{color:'rgba(0,168,255,0.15)'}},axisLabel:{color:'#7aa8cc',fontSize:9},splitLine:{show:false},axisTick:{show:false}},
+    yAxis:{type:'value',axisLine:{show:false},axisLabel:{color:'#3d6080',fontSize:9,formatter:v=>v>=10000?(v/10000).toFixed(0)+'w':v},splitLine:{lineStyle:{color:'rgba(0,168,255,0.06)'}},axisTick:{show:false}},
+    series:[{
+      name:'播放量',type:'bar',data:plays,
+      barWidth:10,
+      itemStyle:{
+        color:new echarts.graphic.LinearGradient(0,0,0,1,[
+          {offset:0,color:'rgba(0,168,255,0.8)'},
+          {offset:1,color:'rgba(0,168,255,0.15)'}
+        ]),
+        borderRadius:[3,3,0,0]
+      },
+      shadowBlur:8,shadowColor:'rgba(0,168,255,0.3)'
+    }]
+  });
+  window.addEventListener('resize',()=>chart.resize());
+}
+
+/* ══════════════════════════════════════════════════
+   示例数据（后端不可用时）
+══════════════════════════════════════════════════ */
+function showDemoData(){
+  // KPI 动画
+  countUp(document.getElementById('kpi-total'),1256);
+  countUp(document.getElementById('kpi-fans'),89234);
+  countUp(document.getElementById('kpi-interact'),2345678);
+  // 环形
+  document.getElementById('ringPct').textContent='78%';
+  const c=2*Math.PI*40;
+  setTimeout(()=>{document.getElementById('ringProgress').style.strokeDasharray=c;document.getElementById('ringProgress').style.strokeDashoffset=c*(1-0.78)},200);
+  // 地图
+  renderMap({});
+  // 图表
+  renderTrendChart({labels:['1月','2月','3月','4月','5月','6月'],play:[12000,18500,22000,19000,28000,35000]});
+  renderBarChart({douyin:{play:85000},ks:{play:52000},bili:{play:38000},wx:{play:21000}});
+}
+
+/* ══════════════════════════════════════════════════
+   启动
+══════════════════════════════════════════════════ */
+initCockpit();
+</script>
+</body>
+</html>
