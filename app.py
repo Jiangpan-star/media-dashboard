@@ -7,9 +7,16 @@
 
 import sys
 import io
-# 强制 stdout/stderr 使用 UTF-8，防止 Windows GBK 终端下 emoji 导致 UnicodeEncodeError
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+import os
+
+# 兼容 Windows GBK 终端：将 stdout/stderr 切换到 UTF-8，处理失败则保留原配置
+# 用 errors='replace' 保证即使遇到无法编码的字符也不会崩溃
+try:
+    if hasattr(sys.stdout, 'buffer') and sys.stdout.encoding.lower() != 'utf-8':
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace', line_buffering=True)
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace', line_buffering=True)
+except Exception:
+    pass
 
 import json
 import re
@@ -20,24 +27,71 @@ from urllib.request import urlopen, Request
 import threading
 
 # ─── 配置 ───────────────────────────────────────────────
-# 优先从 config.py 读取（包含真实密钥，请勿提交到 Git）
-try:
-    from config import (
-        APP_ID, APP_SECRET, APP_TOKEN,
-        TABLE_SUMMARY, TABLE_DOUYIN, TABLE_KS, TABLE_BILI, TABLE_WX, TABLE_TASK
-    )
-except ImportError:
-    # 回退：从环境变量读取（部署环境使用）
-    import os
-    APP_ID     = os.environ.get('FEISHU_APP_ID',     'your_app_id_here')
-    APP_SECRET = os.environ.get('FEISHU_APP_SECRET', 'your_app_secret_here')
-    APP_TOKEN  = os.environ.get('FEISHU_APP_TOKEN',  'your_app_token_here')
-    TABLE_SUMMARY = os.environ.get('TABLE_SUMMARY', 'tblHMOnE2BItPgBX')
-    TABLE_DOUYIN  = os.environ.get('TABLE_DOUYIN',  'tbllvGQssUljleKd')
-    TABLE_KS      = os.environ.get('TABLE_KS',      'tblB0pdwwwqwntVW')
-    TABLE_BILI    = os.environ.get('TABLE_BILI',    'tblR4U14SrHv3mAv')
-    TABLE_WX      = os.environ.get('TABLE_WX',      'tbl3gP6AK5vULPkD')
-    TABLE_TASK    = os.environ.get('TABLE_TASK',    'tblSkGhN53t0JCJm')
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'config.json')
+
+# 配置变量（模块级可变，通过 reload_config() 刷新）
+APP_ID, APP_SECRET, APP_TOKEN = '', '', ''
+TABLE_SUMMARY, TABLE_DOUYIN, TABLE_KS, TABLE_BILI, TABLE_WX, TABLE_TASK = '', '', '', '', '', ''
+FIELD_MAP = {}  # {平台名: {metric: 字段名}}  从 config.json 的 field_mapping 加载
+
+def reload_config():
+    """从 config.json 重新加载配置；出错则回退到 config.py / 环境变量"""
+    global APP_ID, APP_SECRET, APP_TOKEN
+    global TABLE_SUMMARY, TABLE_DOUYIN, TABLE_KS, TABLE_BILI, TABLE_WX, TABLE_TASK
+    global FIELD_MAP
+    try:
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+        feishu = cfg.get('feishu', {})
+        tables = cfg.get('tables', {})
+        FIELD_MAP = cfg.get('field_mapping', {})
+        APP_ID     = feishu.get('app_id', '')
+        APP_SECRET = feishu.get('app_secret', '')
+        APP_TOKEN  = feishu.get('app_token', '')
+        TABLE_SUMMARY = tables.get('汇总表', '')
+        TABLE_DOUYIN  = tables.get('抖音', '')
+        TABLE_KS      = tables.get('快手', '')
+        TABLE_BILI    = tables.get('B站', '')
+        TABLE_WX      = tables.get('微信', '')
+        TABLE_TASK    = tables.get('任务管理', '')
+        print(f"[OK] 配置已从 config.json 加载")
+        return True
+    except Exception as e:
+        # 回退：先从 config.py，再环境变量
+        try:
+            from config import (
+                APP_ID as _aid, APP_SECRET as _as, APP_TOKEN as _at,
+                TABLE_SUMMARY as _ts, TABLE_DOUYIN as _td, TABLE_KS as _tk,
+                TABLE_BILI as _tb, TABLE_WX as _tw, TABLE_TASK as _tt
+            )
+            APP_ID, APP_SECRET, APP_TOKEN = _aid, _as, _at
+            TABLE_SUMMARY, TABLE_DOUYIN, TABLE_KS, TABLE_BILI, TABLE_WX, TABLE_TASK = _ts, _td, _tk, _tb, _tw, _tt
+            print(f"[OK] 配置已从 config.py 加载（config.json 不可用）")
+            return True
+        except Exception:
+            APP_ID     = os.environ.get('FEISHU_APP_ID',     'your_app_id_here')
+            APP_SECRET = os.environ.get('FEISHU_APP_SECRET', 'your_app_secret_here')
+            APP_TOKEN  = os.environ.get('FEISHU_APP_TOKEN',  'your_app_token_here')
+            TABLE_SUMMARY = os.environ.get('TABLE_SUMMARY', 'tblHMOnE2BItPgBX')
+            TABLE_DOUYIN  = os.environ.get('TABLE_DOUYIN',  'tbllvGQssUljleKd')
+            TABLE_KS      = os.environ.get('TABLE_KS',      'tblB0pdwwwqwntVW')
+            TABLE_BILI    = os.environ.get('TABLE_BILI',    'tblR4U14SrHv3mAv')
+            TABLE_WX      = os.environ.get('TABLE_WX',      'tbl3gP6AK5vULPkD')
+            TABLE_TASK    = os.environ.get('TABLE_TASK',    'tblSkGhN53t0JCJm')
+            print(f"[WARN] 配置回退到环境变量/默认值")
+            return True
+
+# 启动时加载
+reload_config()
+
+def clear_all_cache():
+    """清空所有缓存，强制下次请求重新拉取数据"""
+    for k in ['_cache_summary', '_cache_platform', '_cache_tasks', '_cache_trending']:
+        globals()[k] = {'data': None, 'ts': 0}
+    global _author_map, _desc_map, _author_map_ts
+    _author_map = None
+    _desc_map = {}
+    _author_map_ts = 0
 
 PORT      = 8765
 CACHE_TTL = 300  # 5 分钟缓存
@@ -59,12 +113,12 @@ _author_map_ts  = 0
 def feishu_post(url, payload):
     data = json.dumps(payload).encode('utf-8')
     req = Request(url, data=data, headers={'Content-Type': 'application/json'})
-    with urlopen(req, timeout=15) as resp:
+    with urlopen(req, timeout=30) as resp:
         return json.loads(resp.read().decode('utf-8'))
 
 def feishu_get(url, token):
     req = Request(url, headers={'Authorization': f'Bearer {token}'})
-    with urlopen(req, timeout=15) as resp:
+    with urlopen(req, timeout=30) as resp:
         return json.loads(resp.read().decode('utf-8'))
 
 def get_tenant_token():
@@ -108,6 +162,11 @@ def num(v):
     s = str(v).replace('%', '').replace(',', '').strip()
     try: return float(s)
     except: return 0
+
+def fld(table_label, metric, fallback=None):
+    """从 FIELD_MAP 获取指定平台+指标对应的实际字段名"""
+    mapping = FIELD_MAP.get(table_label, {})
+    return mapping.get(metric, fallback or metric)
 
 def parse_ts(v):
     """返回毫秒时间戳，兼容列表包装格式"""
@@ -996,22 +1055,21 @@ def process_douyin(records):
     for rec in records:
         f = rec['fields']
         ts = parse_ts(f.get('发布时间'))
-        fr_raw = num(f.get('完播率'))
-        # 完播率有时是 0-1，有时是百分比，做归一化
+        fr_raw = num(f.get(fld('抖音','finish_rate','完播率')))
         finish_rate = fr_raw if fr_raw <= 1 else fr_raw / 100
         items.append({
             'ts': ts, 'month': ts_to_month(ts),
-            'title': title_str(f.get('作品名称',''))[:80],
-            'play': int(num(f.get('播放量'))),
-            'like': int(num(f.get('点赞量'))),
-            'comment': int(num(f.get('评论量'))),
-            'share': int(num(f.get('分享量'))),
-            'collect': int(num(f.get('收藏量'))),
-            'home_visit': int(num(f.get('主页访问量'))),
-            'fan_incr': int(num(f.get('粉丝增量 (1)'))),
+            'title': title_str(f.get(fld('抖音','title','作品名称'),''))[:80],
+            'play': int(num(f.get(fld('抖音','play','播放量')))),
+            'like': int(num(f.get(fld('抖音','like','点赞量')))),
+            'comment': int(num(f.get(fld('抖音','comment','评论量')))),
+            'share': int(num(f.get(fld('抖音','share','分享量')))),
+            'collect': int(num(f.get(fld('抖音','collect','收藏量')))),
+            'home_visit': int(num(f.get(fld('抖音','home_visit','主页访问量')))),
+            'fan_incr': int(num(f.get(fld('抖音','follower','粉丝增量 (1)')))),
             'finish_rate': round(finish_rate, 4),
             'finish5s': round(num(f.get('5s完播率')), 4),
-            'avg_dur': round(num(f.get('平均播放时长')), 2),
+            'avg_dur': round(num(f.get(fld('抖音','avg_dur','平均播放时长'))), 2),
             'vid': str(f.get('视频编号', '')),
         })
     return _agg_platform(items, extras=['collect', 'home_visit', 'fan_incr', 'finish_rate', 'avg_dur'])
@@ -1021,17 +1079,17 @@ def process_ks(records):
     for rec in records:
         f = rec['fields']
         ts = parse_ts(f.get('发布时间'))
-        fr_s = str(f.get('完播率', '0')).replace('%', '')
+        fr_s = str(f.get(fld('快手','finish_rate','完播率'), '0')).replace('%', '')
         try: fr = float(fr_s) / 100
         except: fr = 0
         items.append({
             'ts': ts, 'month': ts_to_month(ts),
-            'title': title_str(f.get('作品',''))[:80],
-            'play': int(num(f.get('播放量'))),
-            'like': int(num(f.get('点赞量'))),
-            'comment': int(num(f.get('评论量'))),
-            'collect': int(num(f.get('收藏量'))),
-            'fan_incr': int(num(f.get('涨粉量'))),
+            'title': title_str(f.get(fld('快手','title','作品'),''))[:80],
+            'play': int(num(f.get(fld('快手','play','播放量')))),
+            'like': int(num(f.get(fld('快手','like','点赞量')))),
+            'comment': int(num(f.get(fld('快手','comment','评论量')))),
+            'collect': int(num(f.get(fld('快手','collect','收藏量')))),
+            'fan_incr': int(num(f.get(fld('快手','follower','涨粉量')))),
             'finish_rate': round(fr, 4),
             'vid': str(f.get('视频编号', '')),
         })
@@ -1050,15 +1108,15 @@ def process_bili(records):
         except: ir = 0
         items.append({
             'ts': ts, 'month': ts_to_month(ts),
-            'title': title_str(f.get('视频标题',''))[:80],
-            'play': int(num(f.get('播放量'))),
-            'like': int(num(f.get('点赞量'))),
-            'comment': int(num(f.get('评论量'))),
-            'coin': int(num(f.get('投币量'))),
-            'collect': int(num(f.get('收藏量'))),
-            'forward': int(num(f.get('转发量'))),
-            'danmu': int(num(f.get('弹幕量'))),
-            'fan_incr': int(num(f.get('涨粉量'))),
+            'title': title_str(f.get(fld('B站','title','视频标题'),''))[:80],
+            'play': int(num(f.get(fld('B站','play','播放量')))),
+            'like': int(num(f.get(fld('B站','like','点赞量')))),
+            'comment': int(num(f.get(fld('B站','comment','评论量')))),
+            'coin': int(num(f.get(fld('B站','coin','投币量')))),
+            'collect': int(num(f.get(fld('B站','collect','收藏量')))),
+            'forward': int(num(f.get(fld('B站','forward','转发量')))),
+            'danmu': int(num(f.get(fld('B站','danmu','弹幕量')))),
+            'fan_incr': int(num(f.get(fld('B站','follower','涨粉量')))),
             'interact_rate': round(ir, 4),
             'avg_progress': round(ap, 4),
             'vid': str(f.get('视频编号', '')),
@@ -1070,20 +1128,20 @@ def process_wx(records):
     for rec in records:
         f = rec['fields']
         ts = parse_ts(f.get('发布时间'))
-        fr_raw = num(f.get('完播率'))
+        fr_raw = num(f.get(fld('微信','finish_rate','完播率')))
         finish_rate = fr_raw if fr_raw <= 1 else fr_raw / 100
         items.append({
             'ts': ts, 'month': ts_to_month(ts),
-            'title': title_str(f.get('视频描述',''))[:80],
-            'play': int(num(f.get('播放量'))),
-            'like': int(num(f.get('喜欢'))),
-            'comment': int(num(f.get('评论量'))),
-            'share': int(num(f.get('分享量'))),
-            'forward_chat': int(num(f.get('转发聊天和朋友圈'))),
-            'fan_incr': int(num(f.get('关注量'))),
-            'recommend': int(num(f.get('推荐'))),
+            'title': title_str(f.get(fld('微信','title','视频描述'),''))[:80],
+            'play': int(num(f.get(fld('微信','play','播放量')))),
+            'like': int(num(f.get(fld('微信','like','喜欢')))),
+            'comment': int(num(f.get(fld('微信','comment','评论量')))),
+            'share': int(num(f.get(fld('微信','share','分享量')))),
+            'forward_chat': int(num(f.get(fld('微信','forward_chat','转发聊天和朋友圈')))),
+            'fan_incr': int(num(f.get(fld('微信','follower','关注量')))),
+            'recommend': int(num(f.get(fld('微信','recommend','推荐')))),
             'finish_rate': round(finish_rate, 4),
-            'avg_dur': round(num(f.get('平均播放时长')), 2),
+            'avg_dur': round(num(f.get(fld('微信','avg_dur','平均播放时长'))), 2),
             'vid': str(f.get('视频编号', '')),
         })
     return _agg_platform(items, extras=['share', 'forward_chat', 'fan_incr', 'recommend', 'finish_rate', 'avg_dur'])
@@ -1233,6 +1291,121 @@ def get_dashboard_data(force=False):
         raise
 
 
+# ── 配置读取 ─────────────────────────────────────────────
+def get_current_config():
+    """返回当前配置（脱敏处理：app_secret 仅显示后4位）"""
+    with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+        cfg = json.load(f)
+    # 脱敏
+    sec = cfg.get('feishu', {}).get('app_secret', '')
+    if len(sec) > 4:
+        cfg['feishu']['app_secret'] = '****' + sec[-4:]
+    cfg['feishu']['app_secret_masked'] = True
+    return cfg
+
+
+# ── 表格结构探测 ─────────────────────────────────────────
+def probe_table(table_id):
+    """探测飞书表格的字段结构和示例数据"""
+    if not table_id:
+        return {'ok': False, 'msg': '缺少 table 参数'}
+    try:
+        token = get_tenant_token()
+        # 只拉第一页
+        url = (f'https://open.feishu.cn/open-apis/bitable/v1/apps/{APP_TOKEN}'
+               f'/tables/{table_id}/records?page_size=10')
+        result = feishu_get(url, token)
+        if result.get('code') != 0:
+            return {'ok': False, 'msg': f'飞书错误: {result.get("msg", result)}'}
+
+        items = result.get('data', {}).get('items', [])
+        has_more = result.get('data', {}).get('has_more', False)
+
+        # 提取所有字段名和示例值
+        fields = {}
+        samples = []
+        for item in items[:10]:
+            fields_data = item.get('fields', {})
+            row = {}
+            for fname, fval in fields_data.items():
+                if fname not in fields:
+                    fields[fname] = {'type': type(fval).__name__, 'samples': []}
+                val_str = str(fval)[:60]
+                if len(fields[fname]['samples']) < 3:
+                    fields[fname]['samples'].append(val_str)
+            samples.append(row)
+
+        # 自动猜测表格用途
+        field_names = list(fields.keys())
+        guess = guess_table_role(field_names)
+
+        return {
+            'ok': True,
+            'table_id': table_id,
+            'total_fields': len(fields),
+            'total_records_page': len(items),
+            'has_more': has_more,
+            'fields': fields,
+            'field_names': field_names,
+            'guess': guess,
+        }
+    except Exception as e:
+        return {'ok': False, 'msg': f'探测失败: {str(e)}'}
+
+
+def guess_table_role(field_names):
+    """根据字段名自动猜测表格用途"""
+    names = ' '.join(field_names).lower()
+    result = {'role': 'unknown', 'hints': []}
+
+    # 标题字段
+    title_candidates = [f for f in field_names if any(kw in f for kw in ['标题', '名称', '描述', '作品'])]
+    if title_candidates:
+        result['title_field'] = title_candidates[0]
+        result['hints'].append(f'标题字段: {title_candidates[0]}')
+
+    # 数值指标
+    metrics = {
+        'play': ['播放', '浏览', '观看'],
+        'like': ['赞', 'like', 'Like'],
+        'comment': ['评论', 'comment', '回复'],
+        'share': ['分享', '转发', 'share'],
+        'follower': ['粉丝', '关注', 'follower'],
+        'collect': ['收藏', 'collect'],
+        'coin': ['投币', 'coin'],
+        'danmu': ['弹幕', 'danmu'],
+        'finish_rate': ['完播', 'finish'],
+        'avg_dur': ['平均时长', 'avg_dur', 'duration'],
+    }
+    for metric_key, keywords in metrics.items():
+        candidates = [f for f in field_names if any(kw in f for kw in keywords)]
+        if candidates:
+            result[metric_key + '_field'] = candidates[0]
+            result['hints'].append(f'{metric_key}: {candidates[0]}')
+
+    # 平台猜测
+    if any('弹幕' in f or '投币' in f for f in field_names):
+        result['role'] = 'bilibili'
+        result['role_name'] = 'B站'
+    elif any('分享' in f for f in field_names) and any('聊天' in f or '会话' in f for f in field_names):
+        result['role'] = 'weixin'
+        result['role_name'] = '微信'
+    elif any('作品名称' in f for f in field_names):
+        result['role'] = 'douyin'
+        result['role_name'] = '抖音'
+    elif any('作品' in f for f in field_names) and not any('描述' in f for f in field_names):
+        result['role'] = 'kuaishou'
+        result['role_name'] = '快手'
+    elif any('任务' in f or '状态' in f for f in field_names) and any('负责人' in f or '类型' in f for f in field_names):
+        result['role'] = 'task'
+        result['role_name'] = '任务管理'
+    elif any('汇总' in f or '总览' in f for f in field_names):
+        result['role'] = 'summary'
+        result['role_name'] = '汇总表'
+
+    return result
+
+
 # ═══════════════════════════════════════════════════════
 # HTTP Handler
 # ═══════════════════════════════════════════════════════
@@ -1262,6 +1435,105 @@ class Handler(BaseHTTPRequestHandler):
             self._json(get_trending_data())
         elif p == '/api/trending/refresh':
             self._json(get_trending_data(force=True))
+        elif p == '/api/config':
+            self._json(get_current_config())
+        elif p == '/api/ai/chat':
+            # POST 接口，在 do_POST 中处理
+            self.send_response(405); self.end_headers()
+        elif p.startswith('/api/probe'):
+            # GET /api/probe?table=tblxxx
+            qs = self.path.split('?')[1] if '?' in self.path else ''
+            params = {}
+            for kv in qs.split('&'):
+                if '=' in kv:
+                    k, v = kv.split('=', 1)
+                    params[k] = v
+            self._json(probe_table(params.get('table', '')))
+        elif p == '/api/export':
+            # 导出为自包含静态HTML（可部署到任意网站，无需后端）
+            html = generate_static_export()
+            body = html.encode('utf-8')
+            self.send_response(200)
+            self._cors()
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Disposition', 'attachment; filename="dashboard-export.html"')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif p.endswith('.png'):
+            self._serve_file(p.lstrip('/'), 'image/png')
+        elif p.endswith('.jpg') or p.endswith('.jpeg'):
+            self._serve_file(p.lstrip('/'), 'image/jpeg')
+        elif p.endswith('.svg'):
+            self._serve_file(p.lstrip('/'), 'image/svg+xml')
+        elif p.endswith('.ico'):
+            self._serve_file(p.lstrip('/'), 'image/x-icon')
+        else:
+            self.send_response(404); self.end_headers()
+
+    def do_POST(self):
+        p = self.path.split('?')[0]
+        if p == '/api/config':
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length) if length else b'{}'
+            try:
+                try:
+                    body_str = body.decode('utf-8')
+                except UnicodeDecodeError:
+                    body_str = body.decode('gbk', errors='replace')
+                new_cfg = json.loads(body_str)
+                # 防御：如果上传的 app_secret 是脱敏值（以 **** 开头），保留原 config.json 中的真实值
+                incoming_sec = (new_cfg.get('feishu') or {}).get('app_secret', '')
+                if incoming_sec.startswith('****'):
+                    try:
+                        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                            old_cfg = json.load(f)
+                        old_sec = (old_cfg.get('feishu') or {}).get('app_secret', '')
+                        if old_sec and not old_sec.startswith('****'):
+                            new_cfg['feishu']['app_secret'] = old_sec
+                    except Exception:
+                        pass
+                    # 清理掉脱敏标记字段，避免污染配置
+                    new_cfg.get('feishu', {}).pop('app_secret_masked', None)
+                # 保存到 config.json
+                with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(new_cfg, f, ensure_ascii=False, indent=2)
+                # 重新加载配置到内存
+                reload_config()
+                # 清空所有缓存，强制重新拉取
+                clear_all_cache()
+                self._json({'ok': True, 'msg': '配置已保存并生效'})
+            except Exception as e:
+                self._json({'ok': False, 'msg': f'保存失败: {str(e)}'})
+        elif p == '/api/ai/chat':
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length) if length else b'{}'
+            try:
+                # 兼容 Windows curl 等用 GBK 编码的客户端（浏览器默认 UTF-8 不会走这里）
+                try:
+                    body_str = body.decode('utf-8')
+                except UnicodeDecodeError:
+                    body_str = body.decode('gbk', errors='replace')
+                req = json.loads(body_str)
+                user_msg = req.get('message', '').strip()
+                history = req.get('history', [])
+
+                if not user_msg:
+                    self._json({'ok': False, 'msg': '消息不能为空'})
+                    return
+
+                # 注入实时上下文（数据看板 + 热搜 + 近期任务）
+                now = datetime.now()
+                context = f"[当前时间] {now.strftime('%Y年%m月%d日 %H:%M')}（{['一','二','三','四','五','六','日'][now.weekday()]}）\n"
+                data_ctx = _get_data_context()
+                if data_ctx:
+                    context += f"\n[实时数据上下文]\n{data_ctx}\n"
+                context += f"\n[用户问题] {user_msg}"
+
+                result = call_zhipu_ai(context, history)
+                self._json(result)
+            except Exception as e:
+                self._json({'ok': False, 'msg': f'AI服务异常: {str(e)}'})
         else:
             self.send_response(404); self.end_headers()
 
@@ -1294,12 +1566,324 @@ class Handler(BaseHTTPRequestHandler):
 
     def _cors(self):
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
 
     def log_message(self, fmt, *args):
-        if '/api/' in (args[0] if args else ''):
-            print(f"  [{datetime.now().strftime('%H:%M:%S')}] {args[0]}")
+        try:
+            msg = args[0] if args else ''
+            if isinstance(msg, str) and '/api/' in msg:
+                print(f"  [{datetime.now().strftime('%H:%M:%S')}] {args[0]}")
+        except Exception:
+            pass
+
+
+# ═══════════════════════════════════════════════════════
+# 静态导出（生成自包含HTML，可部署到任意网站）
+# ═══════════════════════════════════════════════════════
+
+def generate_static_export():
+    """生成一个完全自包含的静态HTML文件，嵌入所有数据，无需后端即可运行。
+    可上传到 GitHub Pages / Netlify / 任意静态网站托管。"""
+    import os
+
+    # ── 1. 收集所有数据 ──
+    try:
+        dash = get_dashboard_data()
+        plat = get_platform_data()
+        tasks = get_task_data()
+        trend = get_trending_data()
+    except Exception as e:
+        print(f"  [EXPORT] 数据收集失败: {e}")
+        dash, plat, tasks, trend = None, None, None, None
+
+    embedded = {
+        'dashboard': dash,
+        'platforms': plat,
+        'tasks': tasks,
+        'trending': trend,
+        'exported_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    }
+
+    # ── 2. 读取 index.html 模板 ──
+    tpl_path = os.path.join(os.path.dirname(__file__), 'index.html')
+    with open(tpl_path, 'r', encoding='utf-8') as f:
+        html = f.read()
+
+    # ── 3. 关键替换：在原始 JS 执行前拦截 ──
+
+    # (a) 把 API_BASE 替换为空字符串（不请求后端）
+    html = html.replace(
+        "const API_BASE = 'http://localhost:8765';",
+        "const API_BASE = ''; /* 部署版：不连接后端 */"
+    )
+
+    # (b) 替换原始初始化 IIFE 调用为导出版专用逻辑（关键！在原始函数定义之后、调用时替换）
+    export_init = f"""(async function __init_export__() {{
+  // 静态导出版：直接使用内嵌数据，无需后端
+  var _ED = {json.dumps(embedded, ensure_ascii=False)};
+  var mask = document.getElementById('loadingMask');
+  if (mask) mask.innerHTML = '<div style="text-align:center;padding:30px"><div style="font-size:36px;margin-bottom:12px">🚀</div><div style="font-size:14px;color:var(--text2)">正在加载数据...</div></div>';
+
+  var d = _ED.dashboard;
+  if (!d) {{ if(mask) {{ mask.innerHTML='<div style="text-align:center;padding:40px;font-size:14px;color:#f87171">无可用数据</div>'; }} return; }}
+  D = d;
+  renderAll();
+
+  var t = _ED.tasks;
+  if (t && t.tasks) {{ updateTaskStats(); TASK_STATS._updated_at = t.updated_at; }}
+  PD = _ED.platforms;
+  _trendingData = _ED.trending;
+
+  if (mask) mask.style.display = 'none';
+  hideLoading();
+  startRefreshTimer();
+  updateHealthStatus();
+  document.title = document.title.replace(/\\(.*\\)/, '') + '（部署版）';
+}})();"""
+
+    # 尝试精确匹配原始 IIFE
+    old_init = "(async function init() {\n  await initWithRetry(0, 8, 2000);\n})();"
+    if old_init in html:
+        html = html.replace(old_init, export_init)
+    else:
+        # 宽松匹配：找到 initWithRetry 的调用并替换整行
+        import re
+        html = re.sub(
+            r'\(async\s+function\s+init\s*\(\s*\)\s*\{\s*await\s+initWithRetry\([^)]+\)\s*;\s*\}\)\s*\(\s*\)\s*;',
+            export_init,
+            html
+        )
+
+    # (c) 禁用需要后端的功能函数（在 </body> 前追加）
+    disable_script = """<script>
+// ===== 静态部署版功能禁用 =====
+function sendAIMessage(){appendAIMessage('assistant','\\u26a0\\ufe0f 部署版暂不支持AI对话，请使用本地完整版。');}
+function saveConfigV2(){alert('部署版不支持修改配置。');}
+function probeAllTables(){}
+function parseFeishuLinks(){alert('部署版不支持修改配置。');}
+function refreshTrendingPage(){renderTrendingPage();}
+</script>"""
+    insert_marker = '</body>'
+    if insert_marker in html:
+        html = html.replace(insert_marker, disable_script + '\n' + insert_marker)
+
+    # (d) 在 <body> 开头插入顶部横幅提示条
+    banner = f"""<style>.export-banner{{position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg,#6c63ff,#3ecfcf);color:#fff;text-align:center;font-size:12px;padding:4px 0;font-weight:500;letter-spacing:.5px}}.export-banner a{{color:#fff;text-decoration:underline}}</style>
+<div class="export-banner">📦 部署版 · 数据快照于 {embedded['exported_at']} · <a href="javascript:void(0)" onclick="this.parentElement.style.display='none'">关闭提示</a></div>
+
+"""
+    body_marker = '<body>'
+    if body_marker in html:
+        html = html.replace(body_marker, body_marker + '\n' + banner)
+
+    print(f"  [EXPORT] 静态HTML生成完成，大小约 {len(html)//1024}KB")
+    return html
+
+
+# ═══════════════════════════════════════════════════════
+# AI 智能助手（数据查询 + 选题推荐，接入智谱 GLM-4-Flash）
+# ═══════════════════════════════════════════════════════
+
+# 智谱 API Key（GLM-4-Flash 模型免费，注册即送 2000万 tokens）
+ZHIPU_API_KEY = '17b95da1f9ab4101875647c268906faf.C9YLzha2qQ045FSA'
+ZHIPU_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
+
+# 西北民大新媒体中心内容风格（基于 153 条历史选题归纳）
+_SYSTEM_PROMPT = """你是融媒体数据看板的AI智能助手，服务于各类校园/机构融媒体团队。
+
+【你的两大能力】
+A. 数据查询与分析：用户问"播放量最高""涨粉最多""最近有什么任务""哪个平台数据最好"等，必须基于[实时数据上下文]回答，给出准确数字、标题、日期。
+B. 选题策划建议：用户问"推荐选题""怎么拍""结合热点"等，参考[内容风格库]和[当前热搜]给出可执行的选题方案。
+
+【回答规则】
+1. 数据查询类问题：直接引用上下文中的具体数据回答，不要编造数字。如果上下文里没有，老实说"暂无数据"。
+2. 选题推荐类问题：一次最多给3个选题，每个包含①爆款标题 ②拍摄思路(2-3句) ③剪辑/创意风格 ④参考对标
+3. 必须紧贴用户所在机构的校园/组织生活，结合本地地域特色
+4. 严禁涉及：政治、外交、军事、灾难、宗教冲突、民族争议、负面舆情
+5. 选题必须具备"可执行性"——团队3天内能拍出来的内容
+6. 回复要简洁、口语化、有"人味"，像学姐在跟学弟学妹聊天
+7. 涉及节日/节气内容时，结合[当前时间]判断时效性
+
+【内容风格库（参考）】
+1. 校园风景美拍系列：春/夏/秋/冬日校园、鸟瞰校园、像素校园、用XX打开校园、色轮/彩带/赛博校园
+2. 节日/节点系列：高考倒计时、考研倒计时、毕业祝福、母亲节、父亲节、五四青年节、植树节、记者节
+3. 活动记录系列：运动会、迎新、开学典礼、晚会、学术会议、双选会
+4. 美食/探索：舌尖上的校园、寻味系列、看展地图
+5. 人文故事：校园人物推文、致敬劳动者、师者系列、寻找"闪闪发光"的人
+6. 创意拍摄：一镜到底、AI建筑生长、积木/纸张/镜像校园、不同字体打开校训
+7. 招生季：美丽校园(鸟瞰/鸟啼/风景混剪)、寻味校园
+"""
+
+def _gen_jwt_token():
+    """生成智谱 API 鉴权 JWT token"""
+    import time as _time
+    import hashlib, hmac, base64
+    try:
+        # 智谱 API Key 格式：{id}.{secret}
+        parts = ZHIPU_API_KEY.split('.')
+        if len(parts) != 2:
+            return None
+        api_id, api_secret = parts
+        # 使用标准库实现 HS256 JWT
+        header = {'alg': 'HS256', 'sign_type': 'SIGN'}
+        payload = {
+            'api_key': api_id,
+            'exp': int(_time.time()) + 3600,
+            'timestamp': int(_time.time()),
+        }
+        def b64(d):
+            return base64.urlsafe_b64encode(json.dumps(d, separators=(',',':')).encode('utf-8')).rstrip(b'=').decode('ascii')
+        h = b64(header); p = b64(payload)
+        sig = hmac.new(api_secret.encode('utf-8'), f'{h}.{p}'.encode('utf-8'), hashlib.sha256).digest()
+        s = base64.urlsafe_b64encode(sig).rstrip(b'=').decode('ascii')
+        return f'{h}.{p}.{s}'
+    except Exception as e:
+        try:
+            sys.stderr.write(f'[WARN] JWT gen failed: {e}\n')
+        except: pass
+        return None
+
+
+def call_zhipu_ai(user_message, history=None):
+    """调用智谱 GLM-4-Flash 模型"""
+    try:
+        token = _gen_jwt_token()
+        if not token:
+            return {'ok': False, 'msg': 'API Key 格式错误，应为 {id}.{secret}'}
+
+        # 构造消息列表
+        messages = [{'role': 'system', 'content': _SYSTEM_PROMPT}]
+        if history:
+            for h in history[-10:]:
+                if h.get('role') and h.get('content'):
+                    messages.append({'role': h['role'], 'content': h['content']})
+        messages.append({'role': 'user', 'content': user_message})
+
+        payload = {
+            'model': 'glm-4-flash',
+            'messages': messages,
+            'temperature': 0.8,
+            'max_tokens': 1200,
+            'top_p': 0.9,
+        }
+        data = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        req = Request(ZHIPU_API_URL, data=data, headers={
+            'Content-Type': 'application/json; charset=utf-8',
+            'Authorization': f'Bearer {token}',
+        })
+        with urlopen(req, timeout=30) as resp:
+            raw = resp.read()
+            result = json.loads(raw.decode('utf-8'))
+        if result.get('choices'):
+            content = result['choices'][0].get('message', {}).get('content', '')
+            return {'ok': True, 'reply': content, 'usage': result.get('usage', {})}
+        return {'ok': False, 'msg': f'API 返回异常: {json.dumps(result, ensure_ascii=False)[:200]}'}
+    except Exception as e:
+        return {'ok': False, 'msg': f'AI 调用失败: {str(e)}'}
+
+
+def _get_trending_keywords():
+    """获取当前热搜关键词列表，作为AI上下文"""
+    try:
+        data = get_trending_data()
+        items = data.get('items', [])[:10]
+        return [it.get('keyword', '') for it in items]
+    except:
+        return []
+
+
+def _get_recent_tasks():
+    """获取近期任务列表作为AI上下文"""
+    try:
+        data = _cache_tasks.get('data')
+        if not data:
+            return []
+        tasks = data.get('tasks', [])[:20]
+        return [t.get('title', '') for t in tasks if t.get('title')]
+    except:
+        return []
+
+
+def _fmt_num(n):
+    """格式化数字：12345 -> 1.2万"""
+    try:
+        n = int(n or 0)
+        if n >= 100000000:
+            return f'{n/100000000:.1f}亿'
+        if n >= 10000:
+            return f'{n/10000:.1f}万'
+        return str(n)
+    except:
+        return str(n)
+
+
+def _get_data_context():
+    """聚合看板关键数据，作为AI回答数据查询类问题的上下文。
+    返回字符串，包含：四平台TOP作品、涨粉榜、近期任务、平台汇总数据。"""
+    lines = []
+
+    # ── 1. 平台 TOP 作品（播放量） + 涨粉榜 ──
+    try:
+        pdata = _cache_platform.get('data')
+        if pdata:
+            plat_names = {'douyin':'抖音','ks':'快手','bili':'B站','wx':'微信视频号'}
+            for key, label in plat_names.items():
+                pd = pdata.get(key)
+                if not pd: continue
+                top = (pd.get('top20') or [])[:5]
+                if top:
+                    lines.append(f'[{label} 播放量TOP5]')
+                    for i, v in enumerate(top, 1):
+                        title = (v.get('title') or '').strip()[:30]
+                        play = _fmt_num(v.get('play', 0))
+                        fan = _fmt_num(v.get('fan_incr', 0))
+                        like = _fmt_num(v.get('like', 0))
+                        ts = v.get('ts', '')
+                        if hasattr(ts, 'strftime'):
+                            ts = ts.strftime('%Y-%m-%d')
+                        lines.append(f'  {i}. 《{title}》 播放{play} | 点赞{like} | 涨粉{fan} | {ts}')
+                # 涨粉TOP3
+                top_fan = sorted(pd.get('top20') or [], key=lambda x: x.get('fan_incr',0), reverse=True)[:3]
+                if top_fan and any(v.get('fan_incr',0) for v in top_fan):
+                    lines.append(f'[{label} 涨粉TOP3]')
+                    for i, v in enumerate(top_fan, 1):
+                        title = (v.get('title') or '').strip()[:30]
+                        fan = _fmt_num(v.get('fan_incr', 0))
+                        lines.append(f'  {i}. 《{title}》 涨粉{fan}')
+
+            # 平台汇总数据
+            lines.append('[各平台汇总]')
+            for key, label in plat_names.items():
+                pd = pdata.get(key)
+                if not pd: continue
+                lines.append(f'  {label}: 总播放{_fmt_num(pd.get("total_play",0))} | 总涨粉{_fmt_num(pd.get("total_fan",0))} | 作品{pd.get("total_records",0)}条')
+    except Exception as e:
+        try: sys.stderr.write(f'[WARN] data context platform: {e}\n')
+        except: pass
+
+    # ── 2. 近期任务 ──
+    try:
+        tdata = _cache_tasks.get('data')
+        if tdata:
+            tasks = (tdata.get('tasks') or [])[:8]
+            if tasks:
+                lines.append('[近期拍摄任务]')
+                for t in tasks:
+                    title = (t.get('title') or '').strip()[:25]
+                    status = t.get('status', '')
+                    lead = t.get('lead', '')
+                    lines.append(f'  · 《{title}》 状态:{status} 负责人:{lead}')
+    except: pass
+
+    # ── 3. 热搜 ──
+    try:
+        kw = _get_trending_keywords()
+        if kw:
+            lines.append(f'[当前热搜TOP10] {", ".join(kw)}')
+    except: pass
+
+    return '\n'.join(lines) if lines else ''
 
 
 # ═══════════════════════════════════════════════════════
