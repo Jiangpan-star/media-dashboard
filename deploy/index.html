@@ -954,7 +954,7 @@ var _ED = {"dashboard": {"total_play": 35495639, "total_interact": 880316, "tota
 </head>
 <body>
 <style>.export-banner{position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg,#6c63ff,#3ecfcf);color:#fff;text-align:center;font-size:12px;padding:4px 0;font-weight:500;letter-spacing:.5px}.export-banner a{color:#fff;text-decoration:underline}</style>
-<div class="export-banner">📦 部署版 v4 · 更新于 2026-06-30 22:05 · <a href="javascript:void(0)" onclick="this.parentElement.style.display='none'">关闭提示</a></div>
+<div class="export-banner">📦 部署版 v5 · 更新于 2026-06-30 22:21 · <a href="javascript:void(0)" onclick="this.parentElement.style.display='none'">关闭提示</a></div>
 
 <canvas id="particles"></canvas>
 
@@ -3032,7 +3032,50 @@ async function initWithRetry(retryCount = 0, maxRetry = 15, retryInterval = 3000
   }
 }
 
-(async )();
+// ═══════════════════════════════════════════════════
+// 智能初始化：优先使用内嵌数据（部署版无需后端）
+// ═══════════════════════════════════════════════════
+(async function initSmart() {
+  const mask = document.getElementById('loadingMask');
+  try {
+    // ★ 部署版路径：检测内嵌数据 _ED
+    if (typeof _ED !== 'undefined' && _ED && _ED.dashboard) {
+      console.log('[Init] 检测到内嵌数据，使用离线模式渲染');
+      if (mask) mask.innerHTML = `<div style="text-align:center;padding:30px"><div style="font-size:36px;margin-bottom:12px">🚀</div><div style="font-size:14px;color:var(--text2)">正在加载数据...</div></div>`;
+      
+      // 赋值全局变量
+      D = _ED.dashboard;
+      if (_ED.platforms) PD = _ED.platforms;
+      if (_ED.trending) _trendingData = _ED.trending;
+      if (_ED.tasks) TASK_DATA = _ED.tasks;
+
+      // 渲染全部内容
+      renderAll();
+      
+      // 延迟渲染深度分析（确保DOM面板可见）
+      setTimeout(function() {
+        _safe(function() { if (TASK_DATA) { updateTaskStats(); } });
+        _safe(function() { renderDepth(window.depthPlat || 'douyin'); });
+      }, 200);
+
+      if (mask) mask.style.display = 'none';
+      hideLoading();
+      console.log('[Init] 离线模式渲染完成 ✅');
+      return;
+    }
+
+    // ★ 本地开发路径：有后端服务时走重试连接
+    console.log('[Init] 无内嵌数据，尝试连接后端服务...');
+    await initWithRetry();
+  } catch(e) {
+    console.error('[Init] 初始化异常:', e);
+    // 最终兜底：尝试显示页面（即使数据不完整）
+    if (mask) {
+      mask.style.display = 'none';
+      mask.innerHTML = '';
+    }
+  }
+})();
 
 // ═══════════════════════════════════════════════════
 // 平台深度模块
