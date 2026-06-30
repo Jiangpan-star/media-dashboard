@@ -954,7 +954,7 @@ var _ED = {"dashboard": {"total_play": 35495639, "total_interact": 880316, "tota
 </head>
 <body>
 <style>.export-banner{position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg,#6c63ff,#3ecfcf);color:#fff;text-align:center;font-size:12px;padding:4px 0;font-weight:500;letter-spacing:.5px}.export-banner a{color:#fff;text-decoration:underline}</style>
-<div class="export-banner">📦 部署版 v6 · 更新于 2026-06-30 22:32 · <a href="javascript:void(0)" onclick="this.parentElement.style.display='none'">关闭提示</a></div>
+<div class="export-banner">📦 部署版 v7 · 更新于 2026-06-30 22:50 · <a href="javascript:void(0)" onclick="this.parentElement.style.display='none'">关闭提示</a></div>
 
 <canvas id="particles"></canvas>
 
@@ -1657,6 +1657,7 @@ const API_BASE = ''; /* 部署版：不连接后端 */
 // ─── 全局状态 ─────────────────────────────────────
 var D = null;  // 完整数据
 var PD = null; // 平台深度数据
+var _safe;       // 全局安全调用函数（在 __init_export__ 中赋值）
 let charts = {};  // 所有 chart 实例
 let trendRange0 = 6;   // 总览页范围
 let trendRange1 = 6;   // 趋势页范围
@@ -4211,11 +4212,10 @@ function refreshTrendingPage(){renderTrendingPage();}
     if (!d) { mask.innerHTML='<div style="text-align:center;padding:40px;color:#f87171;font-size:14px">无可用数据</div>'; return; }
 
     // ── 1. 先完成所有数据赋值（必须在渲染之前，避免 TDZ）──
-    // ── 2. 先定义 _safe（后面所有渲染都依赖它）──
-    var _safe = function(fn, name) {
+    // ── 2. 定义 _safe 为全局函数（所有 tab 切换都需要）──
+    _safe = function(fn, name) {
       try { fn(); } catch(e) {
         console.warn('[Deploy] '+name+' failed:', e.message);
-        // 在页面上显示错误信息（便于调试）
         var el = document.getElementById('debugInfo');
         if(!el){
           el = document.createElement('div');
@@ -4224,7 +4224,7 @@ function refreshTrendingPage(){renderTrendingPage();}
           document.body.appendChild(el);
         }
         el.style.display='block'; el.textContent=name+': '+e.message;
-        setTimeout(function(){ if(el.textContent===name+': '+e.message) el.style.display='none'; }, 5000);
+        setTimeout(function(){ if(el.textContent===name+': '+e.message) el.style.display='none'; }, 8000);
       }
     };
 
@@ -4267,15 +4267,9 @@ function refreshTrendingPage(){renderTrendingPage();}
       }
     }, 'renderTasksSection-init');
 
-    // ── 7. 预渲染平台深度（抖音 tab，不依赖 tab 切换）──
-    _safe(function(){
-      if (PD && PD.douyin) {
-        renderDepth('douyin');
-        console.log('[Deploy] depth rendered: douyin');
-      } else {
-        console.warn('[Deploy] PD not ready for depth:', PD ? Object.keys(PD) : 'null');
-      }
-    }, 'renderDepth-init');
+    // ── 7. 平台深度图表延迟到用户切 tab 时渲染 ──────────
+    //    （Chart.js 无法在 display:none 的 canvas 上渲染）
+    console.log('[Deploy] depth render deferred to tab switch');
 
   } catch(e) {
     mask.innerHTML = '<div style="text-align:center;padding:40px;color:#f87171;font-size:14px">渲染出错：' + e.message + '</div>';
